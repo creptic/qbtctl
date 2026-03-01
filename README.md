@@ -35,7 +35,7 @@ make
 `qbtctl` requires your qBittorrent Web API credentials to function. You can set them up interactively or pass them via CLI flags.
 
 `qbtctl` checks for auth.txt the following order;
-- ~/.qbtctl/auth.txt 
+- ~/.qbtctl/auth.txt
 - */qbtctl-directory/auth.txt>, 
 - or you can use -c <custompath/auth.txt>
 - **command line arguements will always override auth.txt**
@@ -65,3 +65,13 @@ You can also specify a custom path for the auth file. By default, credentials ar
 
 ```bash
 ./qbtctl --url http://host:8080 --user admin --pass mypass [action]
+```
+
+### Examples: Limits & Sequential Download (Get and Set)
+
+| Standard Output             | `-raw` Output         |
+|-----------------------------|---------------------|
+| UL Limit (KB): **1024**         | **1048576** (bytes)     |
+| DL Limit (KB): **2048**         | **2097152** (bytes)     |
+| Seed Time Limit (DD:HH:MM): **02:00:00**   | **7200** (seconds)       |
+| Sequential Download: **1** | **true**                   |
