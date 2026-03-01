@@ -28,9 +28,19 @@ static int password_empty_flag = 0;
 /*======== SAFE STRING COPY ========*/
 static void safe_strncpy(char *dst, const char *src, size_t dst_size)
 {
-    if(!dst || !src || dst_size==0) return;
-    strncpy(dst, src, dst_size-1);
-    dst[dst_size-1]='\0';
+    if (dst == NULL) return;
+    if (src == NULL) return;
+    if (dst_size == 0) return;
+
+    size_t i = 0;
+
+    while (i + 1 < dst_size && src[i] != '\0')
+    {
+        dst[i] = src[i];
+        i++;
+    }
+
+    dst[i] = '\0';
 }
 
 /*======== XOR ENCRYPT/DECRYPT ========*/
@@ -77,14 +87,6 @@ static void prompt_input(const char *prompt, char *buffer, size_t size, int hide
         if(len>0 && (buffer[len-1]=='\n'||buffer[len-1]=='\r')) buffer[len-1]='\0';
     }
     if(hide){ system("stty echo"); printf("\n"); }
-}
-
-/*======== FILE CHECK ========*/
-static int file_exists(const char *path)
-{
-    FILE *f=fopen(path,"r");
-    if(f){ fclose(f); return 1; }
-    return 0;
 }
 
 /*======== LOAD AUTH FILE ========*/

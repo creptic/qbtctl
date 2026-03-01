@@ -95,6 +95,9 @@ static size_t write_cb(void *ptr, size_t size, size_t nmemb, void *userdata)
 
 static size_t discard_cb(void *ptr, size_t size, size_t nmemb, void *userdata)
 {
+    (void)ptr;
+    (void)userdata;
+
     return size * nmemb;
 }
 
@@ -202,7 +205,7 @@ bool validate_hash(const char *hash)
 /* ================= RESOLVE SHORT HASH ================= */
 int resolve_short_hash(CURL *curl)
 {
-    if (!curl || !creds.qbt_hash || strlen(creds.qbt_hash) == 0) return 0;
+    if (curl == NULL || creds.qbt_hash[0] == '\0') return 0;
 
     size_t input_len = strlen(creds.qbt_hash);
     if (input_len == HASH_WIDTH) return 1;
@@ -663,9 +666,12 @@ void show_all_torrents_info(CURL *curl)
         obj = cJSON_GetObjectItem(item, "seeding_time_limit");
         if (cJSON_IsNumber(obj)) seedtime_limit = obj->valueint;
 
+        // Safe 6-character hash prefix
         char hash6[7] = "";
-        strncpy(hash6, hash, 6);
-        hash6[6] = 0;
+        size_t copy_len = 6;
+        if (copy_len >= sizeof(hash6)) copy_len = sizeof(hash6) - 1;
+        memcpy(hash6, hash, copy_len);
+        hash6[copy_len] = '\0';
 
         char up_buf[32], down_buf[32], seed_buf[32], limit_buf[32];
 
@@ -933,9 +939,16 @@ bool set_seedtime_limit(CURL *curl, const char *seedtime_str)
         if (dd < 0 || hh < 0 || mm < 0) { ERR("Negative values not allowed"); return false; }
         seedtime_seconds = dd*86400L + hh*3600L + mm*60L;
     } else {
-        for (size_t i=0; seedtime_str[i]; i++)
-            if (!isdigit((unsigned char)seedtime_str[i])) { ERR("Invalid numeric seedtime '%s'", seedtime_str); return false; }
-            seedtime_seconds = atol(seedtime_str);
+        for (size_t i = 0; seedtime_str[i]; i++)
+        {
+            if (!isdigit((unsigned char)seedtime_str[i]))
+            {
+                ERR("Invalid numeric seedtime '%s'", seedtime_str);
+                return false;
+            }
+        }
+
+        seedtime_seconds = atol(seedtime_str);
     }
 
     char *escaped = curl_easy_escape(curl, creds.qbt_hash, 0);
@@ -977,7 +990,7 @@ bool set_ratio_limit(CURL *curl, const char *ratio_str)
 
     char postdata[512];
     if (snprintf(postdata, sizeof(postdata),
-        "hashes=%s&ratioLimit=%s&seedingTimeLimit=%ld&inactiveSeedingTimeLimit=-1",
+        "hashes=%s&ratioLimit=%s&seedingTimeLimit=%d&inactiveSeedingTimeLimit=-1",
         escaped, ratio_buf, torrent.seedtime_limit) >= (int)sizeof(postdata)) {
         ERR("POST buffer overflow"); curl_free(escaped); return false;
         }
@@ -1004,11 +1017,16 @@ bool set_category(CURL *curl, const char *category)
     if (!category || !*category) {
         char postdata[256];
         if (snprintf(postdata, sizeof(postdata), "hashes=%s&category=", escaped_hash) >= (int)sizeof(postdata)) {
-            ERR("POST buffer overflow"); curl_free(escaped_hash); return false;
+            ERR("POST buffer overflow");
+            curl_free(escaped_hash);
+            return false;
         }
         curl_free(escaped_hash);
 
-        if (!qbt_request(curl, "/api/v2/torrents/setCategory", postdata, NULL)) { ERR("Failed to clear category"); return false; }
+        if (!qbt_request(curl, "/api/v2/torrents/setCategory", postdata, NULL)) {
+            ERR("Failed to clear category");
+            return false;
+        }
         return true;
     }
 
@@ -1017,7 +1035,10 @@ bool set_category(CURL *curl, const char *category)
 
     char postdata[512];
     if (snprintf(postdata, sizeof(postdata), "hashes=%s&category=%s", escaped_hash, escaped_category) >= (int)sizeof(postdata)) {
-        ERR("POST buffer overflow"); curl_free(escaped_hash); curl_free(escaped_category); return false;
+        ERR("POST buffer overflow");
+        curl_free(escaped_hash);
+        curl_free(escaped_category);
+        return false;
     }
 
     curl_free(escaped_hash);
@@ -1027,9 +1048,14 @@ bool set_category(CURL *curl, const char *category)
     struct memory mem;
     mem.data = malloc(MAX_JSON);
     if (!mem.data) { ERR("Memory allocation failed"); return false; }
-    mem.size = 0; mem.data[0] = 0;
+    mem.size = 0;
+    mem.data[0] = 0;
 
-    if (!qbt_request(curl, "/api/v2/torrents/categories", NULL, &mem)) { ERR("Failed to fetch categories"); free(mem.data); return false; }
+    if (!qbt_request(curl, "/api/v2/torrents/categories", NULL, &mem)) {
+        ERR("Failed to fetch categories");
+        free(mem.data);
+        return false;
+    }
 
     bool exists = false;
     cJSON *root = cJSON_Parse(mem.data);
@@ -1037,23 +1063,47 @@ bool set_category(CURL *curl, const char *category)
     if (root && cJSON_IsObject(root)) {
         for (cJSON *child = root->child; child; child = child->next) {
             if (cJSON_IsString(child) && child->string) {
-                char child_lower[128]; size_t clen = strlen(child->string); if (clen >= sizeof(child_lower)) clen = sizeof(child_lower)-1;
-                for (size_t i=0;i<clen;i++) child_lower[i]=tolower((unsigned char)child->string[i]); child_lower[clen]=0;
-                char category_lower[128]; size_t len=strlen(category); if(len>=sizeof(category_lower)) len=sizeof(category_lower)-1;
-                for(size_t i=0;i<len;i++) category_lower[i]=tolower((unsigned char)category[i]); category_lower[len]=0;
-                if(strcmp(child_lower,category_lower)==0) { exists=true; break; }
+                char child_lower[128];
+                size_t clen = strlen(child->string);
+                if (clen >= sizeof(child_lower)) clen = sizeof(child_lower)-1;
+                for (size_t i = 0; i < clen; i++) {
+                    child_lower[i] = tolower((unsigned char)child->string[i]);
+                }
+                child_lower[clen] = '\0';
+
+                char category_lower[128];
+                size_t len = strlen(category);
+                if (len >= sizeof(category_lower)) len = sizeof(category_lower)-1;
+                for (size_t i = 0; i < len; i++) {
+                    category_lower[i] = tolower((unsigned char)category[i]);
+                }
+                category_lower[len] = '\0';
+
+                if (strcmp(child_lower, category_lower) == 0) {
+                    exists = true;
+                    break;
+                }
             }
         }
     }
-    if(root) cJSON_Delete(root);
+    if (root) cJSON_Delete(root);
 
-    if(!exists) {
+    if (!exists) {
         char postcreate[256];
-        if (snprintf(postcreate,sizeof(postcreate),"category=%s",category)>= (int)sizeof(postcreate)) { ERR("POST buffer overflow for category creation"); return false; }
-        if(!qbt_request(curl,"/api/v2/torrents/createCategory",postcreate,NULL)) { ERR("Failed to create category '%s'", category); return false; }
+        if (snprintf(postcreate, sizeof(postcreate), "category=%s", category) >= (int)sizeof(postcreate)) {
+            ERR("POST buffer overflow for category creation");
+            return false;
+        }
+        if (!qbt_request(curl, "/api/v2/torrents/createCategory", postcreate, NULL)) {
+            ERR("Failed to create category '%s'", category);
+            return false;
+        }
     }
 
-    if(!qbt_request(curl,"/api/v2/torrents/setCategory",postdata,NULL)) { ERR("Failed to set category '%s'",category); return false; }
+    if (!qbt_request(curl, "/api/v2/torrents/setCategory", postdata, NULL)) {
+        ERR("Failed to set category '%s'", category);
+        return false;
+    }
 
     return true;
 }
