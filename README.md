@@ -76,6 +76,16 @@ You can also specify a custom path for the auth file. By default, credentials ar
 | Seed Time Limit (DD:HH:MM): **02:00:00**   | **7200** (seconds)       |
 | Sequential Download: **1** | **true**                   |
 
+## Exit Codes
+
+| Code | Macro Name           | Description |
+|------|----------------------|-------------|
+| 0    | `EXIT_OK`            | Successful execution |
+| 1    | `EXIT_LOGIN_FAIL`    | Login/authentication failed |
+| 2    | `EXIT_FETCH_FAIL`    | Failed to fetch data from API |
+| 3    | `EXIT_SET_FAIL`      | Failed to set/update value |
+| 4    | `EXIT_BAD_ARGS`      | Invalid or missing command-line arguments |
+
 ```
 ./qbtctl --help
 qbtctl - qBittorrent torrent CLI Tool
