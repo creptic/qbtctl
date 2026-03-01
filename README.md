@@ -1,6 +1,6 @@
 # qbtctl
 
-**qbtctl** is a minimal, crash-proof command-line interface for controlling [qBittorrent](https://www.qbittorrent.org/) via its Web API.  
+**qbtctl** is a minimal, ultra fast command-line interface for controlling [qBittorrent](https://www.qbittorrent.org/) via its Web API.  
 
 It allows you to manage torrents directly from the terminal, supporting operations like:  
 - Pausing, resuming, stopping, and removing torrents  
@@ -10,17 +10,6 @@ It allows you to manage torrents directly from the terminal, supporting operatio
 
 Designed to be **compact, single-binary, and portable**, easy to compile and deploy.  
 Lightweight, yet powerful — perfect for scripting or managing your qBittorrent instance from the terminal.
-
-## Table of Contents
-
-1. [About](#qbtctl)
-2. [Requirements](#requirements)
-3. [Installation & Compilation](#installation--compilation)
-4. [Authentication Setup](#authentication)
-5. [Usage Examples](#usage-examples)
-6. [File Structure](#file-structure)
-7. [Notes](#notes)
-8. [License](#license)
 
 ## Requirements
 
@@ -52,7 +41,7 @@ make
 - **command line arguements will always override auth.txt**
 - If no auth.txt is found, it will use the defaults with admin as password.
 
-### Interactive Setup
+## Interactive Setup
 
 Run:
 ```bash
