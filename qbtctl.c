@@ -430,9 +430,54 @@ char *get_hash()     { return torrent.hash; }
 char *get_tags()     { return torrent.tags; }
 char *get_category() { return torrent.category; }
 char *get_dl_path()  { return torrent.dl_path; }
-char *get_tracker()  { return torrent.tracker; }
-char *get_state()  { return torrent.state; }
 
+char *get_state()  { return torrent.state; }
+char *get_tracker(void)
+{
+    static char formatted[512];
+
+    if (!torrent.tracker[0])  // check for empty string, not NULL
+        return NULL;
+
+    if (raw==1)
+        return torrent.tracker;
+
+    const char *tracker = torrent.tracker;
+
+    const char *scheme = strstr(tracker, "://");
+    if (!scheme)
+        return torrent.tracker;
+
+    const char *host_start = scheme + 3;
+    const char *host_end = host_start;
+
+    while (*host_end)
+    {
+        if (*host_end == ':' ||
+            *host_end == '/' ||
+            *host_end == '?')
+            break;
+        host_end++;
+    }
+
+    size_t scheme_len = (scheme - tracker) + 3;
+    size_t host_len = host_end - host_start;
+
+    if (scheme_len + host_len >= sizeof(formatted))
+        return torrent.tracker;
+
+    memcpy(formatted, tracker, scheme_len);
+
+    for (size_t i = 0; i < host_len; i++)
+    {
+        formatted[scheme_len + i] =
+            (char)tolower((unsigned char)host_start[i]);
+    }
+
+    formatted[scheme_len + host_len] = '\0';
+
+    return formatted;
+}
 char *get_uplimit() {
     static char buf[32];
     if(raw == 1) {
@@ -490,48 +535,154 @@ char *get_seedtime_limit() {
 }
 
 /* ================= GET TRACKER LIST ================= */
-int get_tracker_list(CURL *curl, const char *hash)
+int get_tracker_list(CURL *curl)
 {
-    if (!hash || strlen(hash) == 0) return 0;
+    if (!curl) {
+        ERR("CURL handle is NULL");
+        return -1;
+    }
+
+    if (!creds.qbt_hash[0]) {
+        ERR("No torrent hash loaded");
+        return -1;
+    }
+
+    char *escaped_hash = curl_easy_escape(curl, creds.qbt_hash, 0);
+    if (!escaped_hash) {
+        ERR("Failed to escape hash");
+        return -1;
+    }
 
     char url[512];
-    snprintf(url, sizeof(url), "%s/api/v2/torrents/trackers?hash=%s", creds.qbt_url, hash);
+    int written = snprintf(url, sizeof(url),
+                           "%s/api/v2/torrents/trackers?hash=%s",
+                           creds.qbt_url,
+                           escaped_hash);
+
+    curl_free(escaped_hash);
+
+    if (written < 0 || written >= (int)sizeof(url)) {
+        ERR("URL buffer overflow");
+        return -1;
+    }
 
     char *json = qbt_get_json(curl, url);
-    if (!json) return 0;
+    if (!json) {
+        ERR("Failed to fetch tracker list");
+        return -1;
+    }
 
     cJSON *root = cJSON_Parse(json);
     free(json);
-    if (!root || !cJSON_IsArray(root))
-    {
+
+    if (!root || !cJSON_IsArray(root)) {
         if (root) cJSON_Delete(root);
-        ERR("get_tracker_list: invalid JSON");
-        return 0;
+        ERR("Invalid JSON from tracker endpoint");
+        return -1;
     }
+
+    /* Used only when raw_mode == 0 */
+    char seen_hosts[128][256];
+    int seen_count = 0;
 
     int count = cJSON_GetArraySize(root);
-    for (int i = 0; i < count; i++)
-    {
+    int printed = 0;
+
+    for (int i = 0; i < count; i++) {
+
         cJSON *obj = cJSON_GetArrayItem(root, i);
-        if (!cJSON_IsObject(obj)) continue;
+        if (!cJSON_IsObject(obj))
+            continue;
 
         cJSON *url_item = cJSON_GetObjectItem(obj, "url");
-        if (!cJSON_IsString(url_item)) continue;
+        if (!cJSON_IsString(url_item) || !url_item->valuestring)
+            continue;
 
         const char *tracker = url_item->valuestring;
-        if (!tracker) continue;
 
-        if (strstr(tracker, "[DHT]")) continue;
-        if (strstr(tracker, "[PeX]")) continue;
-        if (strstr(tracker, "[LSD]")) continue;
+        /* Skip internal trackers */
+        if (strcmp(tracker, "** [DHT] **") == 0)
+            continue;
+        if (strcmp(tracker, "** [PeX] **") == 0)
+            continue;
+        if (strcmp(tracker, "** [LSD] **") == 0)
+            continue;
 
-        printf("%s\n", tracker);
+        /* ---------------- RAW MODE ---------------- */
+        if (raw==1) {
+            if (printed > 0)
+                printf(",");
+            printf("%s", tracker);
+            printed++;
+            continue;
+        }
+
+        /* -------- NORMALIZED MODE (Deduplicate) -------- */
+
+        const char *scheme = strstr(tracker, "://");
+        if (!scheme)
+            continue;
+
+        const char *host_start = scheme + 3;
+        const char *host_end = host_start;
+
+        while (*host_end &&
+            *host_end != ':' &&
+            *host_end != '/' &&
+            *host_end != '?')
+            host_end++;
+
+        size_t host_len = host_end - host_start;
+        if (host_len == 0 || host_len >= 256)
+            continue;
+
+        char host[256];
+        memcpy(host, host_start, host_len);
+        host[host_len] = '\0';
+
+        /* Deduplicate by hostname */
+        int duplicate = 0;
+
+        for (int j = 0; j < seen_count; j++) {
+            if (strcasecmp(seen_hosts[j], host) == 0) {
+                duplicate = 1;
+                break;
+            }
+        }
+
+        if (duplicate)
+            continue;
+
+        if (seen_count >= 128)
+            continue;
+
+        strcpy(seen_hosts[seen_count], host);
+        seen_count++;
+
+        /* Build scheme://host */
+        char output[512];
+        size_t scheme_len = (scheme - tracker) + 3;
+        size_t total_len = scheme_len + host_len;
+
+        if (total_len >= sizeof(output))
+            continue;
+
+        memcpy(output, tracker, scheme_len);
+        memcpy(output + scheme_len, host, host_len);
+        output[total_len] = '\0';
+
+        if (printed > 0)
+            printf(",");
+        printf("%s", output);
+        printed++;
     }
 
-    cJSON_Delete(root);
-    return 1;
-}
+    if (printed > 0)
+        printf("\n");
 
+    cJSON_Delete(root);
+    return printed;
+}
 
 /* ================= SHOW ALL TORRENTS INFO AS JSON ================= */
 void show_all_torrents_info_json(CURL *curl)
@@ -1004,7 +1155,6 @@ bool set_ratio_limit(CURL *curl, const char *ratio_str)
     return true;
 }
 
-/* ================= SET CATEGORY ================= */
 /* ================= SET CATEGORY ================= */
 bool set_category(CURL *curl, const char *category)
 {
@@ -1481,9 +1631,9 @@ int main(int argc, char **argv)
             }
             show_json = 0;
             did_action = true;
-        } else if ((strcmp(arg, "-gtl") == 0 || strcmp(arg, "--get-tracker-list") == 0)) {
-            if (!get_tracker_list(curl, creds.qbt_hash))
-                fprintf(stderr, "Failed to fetch tracker list\n");
+        } else if ((strcmp(arg, "-gtl") == 0 || strcmp(arg, "--get-tracker-list") == 0) && ensure_single_loaded(curl, &single_loaded)) {
+            if (!get_tracker_list(curl))
+                ERR("Failed to fetch tracker list\n");
             did_action = true;
         } else if ((strcmp(arg, "-gn") == 0 || strcmp(arg, "--get-name") == 0) && ensure_single_loaded(curl, &single_loaded)) {
             printf("%s\n", get_name());
