@@ -10,6 +10,7 @@ It allows you to manage torrents directly from the terminal, supporting operatio
 
 Designed to be **compact, single-binary, and portable**, easy to compile and deploy.  
 Lightweight, yet powerful — perfect for scripting or managing your qBittorrent instance from the terminal.
+**qbtctl is precompiled (static) in source folder no need to compile**
 
 ## Requirements for Compiling
 
@@ -18,17 +19,15 @@ Before compiling and using `qbtctl`, make sure your system has:
 - **C compiler** (`cc`, `gcc`, or `clang`)  
 - **libcurl** (sudo pacman -S curl on arch) (sudo apt-get install libcurl4-openssl-dev on debian)  
 - POSIX-compliant OS (Linux, macOS, etc.)  
-
+- Makefile included. run make to compile. To compile for portability (static) use the docker command at bottom of this page.
 ---
 
-## Installation & Compilation (prebuilt qbtctl included)
-
+## Installation (using prebuilt qbtctl)
 Clone the repository:
 
 ```bash
 git clone https://github.com/creptic/qbtctl.git
 cd qbtctl
-make (if you want to compile)
 chmod +x qbtctl
 ./qbtctl --setup  
 ```
