@@ -77,16 +77,21 @@ static void hex_to_bytes(const char *hex, char *out, size_t out_size)
 }
 
 /*======== PROMPT INPUT ========*/
-static void prompt_input(const char *prompt, char *buffer, size_t size, int hide)
+static void prompt_input(const char *prompt, char *buf, size_t len, int hide)
 {
-    printf("%s",prompt);
-    if(hide) system("stty -echo");
-    if(fgets(buffer,size,stdin))
-    {
-        size_t len=strlen(buffer);
-        if(len>0 && (buffer[len-1]=='\n'||buffer[len-1]=='\r')) buffer[len-1]='\0';
+    if(prompt) printf("%s", prompt);
+    fflush(stdout);
+
+    // Fully static-safe: fgets works in any static binary
+    if(fgets(buf, len, stdin)) {
+        size_t l = strlen(buf);
+        if(l && buf[l-1] == '\n') buf[l-1] = 0;
+    } else {
+        buf[0] = 0;
     }
-    if(hide){ system("stty echo"); printf("\n"); }
+
+    // hide parameter is ignored because getpass() is not safe in static builds
+    (void)hide;
 }
 
 /*======== LOAD AUTH FILE ========*/
@@ -137,62 +142,91 @@ static int save_auth_file(const char *path)
 }
 
 /*======== INTERACTIVE SETUP ========*/
+
+
 static int interactive_setup()
 {
-    char tmp_url[256]={0}, tmp_user[64]={0}, tmp_pass1[64]={0}, tmp_pass2[64]={0};
-    const char *home=getenv("HOME");
-    if(!home){ struct passwd *pw=getpwuid(getuid()); home=pw?pw->pw_dir:"."; }
+    char tmp_url[256]   = {0};
+    char tmp_user[64]   = {0};
+    char tmp_pass1[64]  = {0};
+    char tmp_pass2[64]  = {0};
+    int password_empty_flag = 0;
+
+    // Static-safe home directory
+    const char *home = getenv("HOME");
+    static char fallback_home[256];
+    if(!home) {
+        const char *env_user = getenv("USER");
+        if(env_user && env_user[0]) {
+            snprintf(fallback_home, sizeof(fallback_home), "/home/%s", env_user);
+        } else {
+            snprintf(fallback_home, sizeof(fallback_home), ".");
+        }
+        home = fallback_home;
+    }
 
     printf("+------------------------------------------+\n");
-    prompt_input("Enter qBittorrent URL (http://host[:port]): ", tmp_url,sizeof(tmp_url),0);
-    if(strlen(tmp_url)==0) safe_strncpy(tmp_url,"http://localhost:8080",sizeof(tmp_url));
 
-        prompt_input("Enter username: ", tmp_user,sizeof(tmp_user),0);
-    if(strlen(tmp_user)==0) safe_strncpy(tmp_user,"admin",sizeof(tmp_user));
+    // URL
+    prompt_input("Enter qBittorrent URL (http://host[:port]): ", tmp_url, sizeof(tmp_url), 0);
+    if(strlen(tmp_url) == 0) safe_strncpy(tmp_url, "http://localhost:8080", sizeof(tmp_url));
 
-    while(1)
-    {
-        prompt_input("Enter password (empty allowed): ", tmp_pass1,sizeof(tmp_pass1),1);
-        prompt_input("Confirm password: ", tmp_pass2,sizeof(tmp_pass2),1);
+        // Username
+        prompt_input("Enter username: ", tmp_user, sizeof(tmp_user), 0);
+    if(strlen(tmp_user) == 0) safe_strncpy(tmp_user, "admin", sizeof(tmp_user));
 
-        if(strlen(tmp_pass1)==0){ password_empty_flag=1; break; }
-        if(strcmp(tmp_pass1,tmp_pass2)==0) break;
+    // Password
+    while(1) {
+        prompt_input("Enter password (empty allowed): ", tmp_pass1, sizeof(tmp_pass1), 1);
+        prompt_input("Confirm password: ", tmp_pass2, sizeof(tmp_pass2), 1);
+
+        if(strlen(tmp_pass1) == 0){ password_empty_flag = 1; break; }
+        if(strcmp(tmp_pass1, tmp_pass2) == 0) break;
         printf("Passwords do not match. Try again.\n");
     }
 
-    safe_strncpy(creds.qbt_url,tmp_url,sizeof(creds.qbt_url));
-    safe_strncpy(creds.qbt_user,tmp_user,sizeof(creds.qbt_user));
+    safe_strncpy(creds.qbt_url, tmp_url, sizeof(creds.qbt_url));
+    safe_strncpy(creds.qbt_user, tmp_user, sizeof(creds.qbt_user));
+    if(password_empty_flag) creds.qbt_pass[0] = '\0';
+    else safe_strncpy(creds.qbt_pass, tmp_pass1, sizeof(creds.qbt_pass));
 
-    if(password_empty_flag) creds.qbt_pass[0]='\0';
-    else safe_strncpy(creds.qbt_pass,tmp_pass1,sizeof(creds.qbt_pass));
-
+    // Default auth file path
     char default_path[256];
-    snprintf(default_path,sizeof(default_path),"%s%s/%s",home,DEFAULT_AUTH_DIR,DEFAULT_AUTH_FILE);
+    snprintf(default_path, sizeof(default_path), "%s%s/%s", home, DEFAULT_AUTH_DIR, DEFAULT_AUTH_FILE);
 
     char save_path[256];
-    prompt_input("Save auth file path (ENTER for default): ", save_path,sizeof(save_path),0);
-    if(strlen(save_path)==0) safe_strncpy(save_path,default_path,sizeof(save_path));
+    prompt_input("Save auth file path (ENTER for default): ", save_path, sizeof(save_path), 0);
+    if(strlen(save_path) == 0) safe_strncpy(save_path, default_path, sizeof(save_path));
 
-    if(!save_auth_file(save_path)){ ERR("Failed to save auth file to %s",save_path); printf("+------------------------------------------+\n"); return 0; }
+    if(!save_auth_file(save_path)) {
+        ERR("Failed to save auth file to %s", save_path);
+        printf("+------------------------------------------+\n");
+        return 0;
+    }
 
     printf("Auth saved to: %s\n", save_path);
 
     /*======== CONNECTION TEST ========*/
     printf("Testing connection...\n");
-    CURL *curl=curl_easy_init();
+    CURL *curl = curl_easy_init();
     if(!curl){ ERR("CURL init failed"); return 0; }
 
     char test_url[512];
-    snprintf(test_url,sizeof(test_url),"%s/api/v2/app/version",creds.qbt_url);
+    snprintf(test_url, sizeof(test_url), "%s/api/v2/app/version", creds.qbt_url);
 
-    curl_easy_setopt(curl,CURLOPT_URL,test_url);
-    curl_easy_setopt(curl,CURLOPT_USERNAME,creds.qbt_user);
-    curl_easy_setopt(curl,CURLOPT_PASSWORD,creds.qbt_pass);
-    curl_easy_setopt(curl,CURLOPT_NOPROGRESS,1L);
-    curl_easy_setopt(curl,CURLOPT_NOBODY,1L);
+    curl_easy_setopt(curl, CURLOPT_URL, test_url);
+    curl_easy_setopt(curl, CURLOPT_USERNAME, creds.qbt_user);
+    curl_easy_setopt(curl, CURLOPT_PASSWORD, creds.qbt_pass);
+    curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 1L);
+    curl_easy_setopt(curl, CURLOPT_NOBODY, 1L);
 
     CURLcode res = curl_easy_perform(curl);
-    if(res != CURLE_OK){ ERR("Connection test failed: %s",curl_easy_strerror(res)); printf("+------------------------------------------+\n"); curl_easy_cleanup(curl); return 0; }
+    if(res != CURLE_OK) {
+        ERR("Connection test failed: %s", curl_easy_strerror(res));
+        printf("+------------------------------------------+\n");
+        curl_easy_cleanup(curl);
+        return 0;
+    }
 
     curl_easy_cleanup(curl);
     printf("Connection successful!\n");
