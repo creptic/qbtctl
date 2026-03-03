@@ -11,7 +11,7 @@ It allows you to manage torrents directly from the terminal, supporting operatio
 Designed to be **compact, single-binary, and portable**, easy to compile and deploy.  
 Lightweight, yet powerful — perfect for scripting or managing your qBittorrent instance from the terminal.
 
-## Requirements
+## Requirements for Compiling
 
 Before compiling and using `qbtctl`, make sure your system has:
 
@@ -21,14 +21,15 @@ Before compiling and using `qbtctl`, make sure your system has:
 
 ---
 
-## Installation & Compilation
+## Installation & Compilation (prebuilt qbtctl included)
 
 Clone the repository:
 
 ```bash
 git clone https://github.com/creptic/qbtctl.git
 cd qbtctl
-make 
+make (if you want to compile)
+./qbtctl -t  
 ```
 ## Authentication Setup
 
