@@ -82,7 +82,6 @@ static void prompt_input(const char *prompt, char *buf, size_t len, int hide)
     if(prompt) printf("%s", prompt);
     fflush(stdout);
 
-    // Fully static-safe: fgets works in any static binary
     if(fgets(buf, len, stdin)) {
         size_t l = strlen(buf);
         if(l && buf[l-1] == '\n') buf[l-1] = 0;
@@ -90,9 +89,9 @@ static void prompt_input(const char *prompt, char *buf, size_t len, int hide)
         buf[0] = 0;
     }
 
-    // hide parameter is ignored because getpass() is not safe in static builds
-    (void)hide;
+    (void)hide; // ignore hide, safe for static
 }
+
 
 /*======== LOAD AUTH FILE ========*/
 static int load_auth_file(const char *path)
@@ -152,16 +151,15 @@ static int interactive_setup()
     char tmp_pass2[64]  = {0};
     int password_empty_flag = 0;
 
-    // Static-safe home directory
+    // ===== STATIC-SAFE HOME =====
     const char *home = getenv("HOME");
     static char fallback_home[256];
-    if(!home) {
+    if(!home){
         const char *env_user = getenv("USER");
-        if(env_user && env_user[0]) {
+        if(env_user && env_user[0])
             snprintf(fallback_home, sizeof(fallback_home), "/home/%s", env_user);
-        } else {
+        else
             snprintf(fallback_home, sizeof(fallback_home), ".");
-        }
         home = fallback_home;
     }
 
@@ -176,7 +174,7 @@ static int interactive_setup()
     if(strlen(tmp_user) == 0) safe_strncpy(tmp_user, "admin", sizeof(tmp_user));
 
     // Password
-    while(1) {
+    while(1){
         prompt_input("Enter password (empty allowed): ", tmp_pass1, sizeof(tmp_pass1), 1);
         prompt_input("Confirm password: ", tmp_pass2, sizeof(tmp_pass2), 1);
 
@@ -190,15 +188,20 @@ static int interactive_setup()
     if(password_empty_flag) creds.qbt_pass[0] = '\0';
     else safe_strncpy(creds.qbt_pass, tmp_pass1, sizeof(creds.qbt_pass));
 
-    // Default auth file path
+    // ===== SAFE default_path construction =====
     char default_path[256];
-    snprintf(default_path, sizeof(default_path), "%s%s/%s", home, DEFAULT_AUTH_DIR, DEFAULT_AUTH_FILE);
+    int n = snprintf(default_path, sizeof(default_path), "%s%s/%s",
+                     home, DEFAULT_AUTH_DIR, DEFAULT_AUTH_FILE);
+    if(n < 0 || n >= (int)sizeof(default_path)){
+        ERR("default_path too long, truncated");
+        default_path[sizeof(default_path)-1] = '\0';
+    }
 
     char save_path[256];
     prompt_input("Save auth file path (ENTER for default): ", save_path, sizeof(save_path), 0);
     if(strlen(save_path) == 0) safe_strncpy(save_path, default_path, sizeof(save_path));
 
-    if(!save_auth_file(save_path)) {
+    if(!save_auth_file(save_path)){
         ERR("Failed to save auth file to %s", save_path);
         printf("+------------------------------------------+\n");
         return 0;
@@ -221,7 +224,7 @@ static int interactive_setup()
     curl_easy_setopt(curl, CURLOPT_NOBODY, 1L);
 
     CURLcode res = curl_easy_perform(curl);
-    if(res != CURLE_OK) {
+    if(res != CURLE_OK){
         ERR("Connection test failed: %s", curl_easy_strerror(res));
         printf("+------------------------------------------+\n");
         curl_easy_cleanup(curl);
