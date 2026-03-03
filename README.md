@@ -29,6 +29,7 @@ Clone the repository:
 git clone https://github.com/creptic/qbtctl.git
 cd qbtctl
 make (if you want to compile)
+chmod +x qbtctl
 ./qbtctl --setup  
 ```
 ## Authentication Setup
