@@ -146,3 +146,20 @@ Usage:
   qbtctl --show-all
   qbtctl --setup
 ``` 
+
+## Compiling static link with Docker
+```
+docker run --rm -v $(pwd):/out alpine:latest /bin/sh -c "
+    apk add --no-cache build-base musl-dev zlib-static pkgconf wget tar &&
+    cd /tmp &&
+    wget https://curl.se/download/curl-8.17.0.tar.gz &&
+    tar xzf curl-8.17.0.tar.gz &&
+    cd curl-8.17.0 &&
+    ./configure --disable-shared --enable-static --without-ssl --disable-ntlm --disable-ldap --disable-ldaps \
+                --disable-ftp --disable-file --disable-dict --disable-telnet --disable-pop3 --disable-imap \
+                --disable-smtp --disable-gopher --disable-manual --disable-psl --without-libpsl &&
+    make -j\$(nproc) &&
+    cd /out &&
+    gcc -O2 -static -s -I/tmp/curl-8.17.0/include -L/tmp/curl-8.17.0/lib/.libs -o qbtctl *.c -lcurl -lz
+"
+```
