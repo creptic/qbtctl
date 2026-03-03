@@ -147,7 +147,7 @@ Usage:
   qbtctl --setup
 ``` 
 
-## Compiling static link with Docker
+## Compiling static link with Docker (cd into the source dir)
 ```
 docker run --rm -v $(pwd):/out alpine:latest /bin/sh -c "
     apk add --no-cache build-base musl-dev zlib-static pkgconf wget tar &&
