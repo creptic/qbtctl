@@ -127,16 +127,27 @@ static int load_auth_file(const char *path)
     return 1;
 }
 
+/* Dummy write callback that discards data */
+static size_t discard_write(void *ptr, size_t size, size_t nmemb, void *userdata) {
+    (void)ptr;
+    (void)userdata;
+    return size*nmemb;  // tell curl we handled all bytes
+}
+
+
 /* INTERACTIVE SETUP */
 static int interactive_setup()
 {
     char tmp_url[256]={0}, tmp_user[64]={0}, tmp_pass[64]={0};
     const char *home=getenv("HOME");
     static char fallback_home[256];
+
     if(!home){
         const char *env_user=getenv("USER");
-        if(env_user && env_user[0]) snprintf(fallback_home,sizeof(fallback_home),"/home/%s",env_user);
-        else snprintf(fallback_home,sizeof(fallback_home),".");
+        if(env_user && env_user[0])
+            snprintf(fallback_home,sizeof(fallback_home),"/home/%s",env_user);
+        else
+            snprintf(fallback_home,sizeof(fallback_home),".");
         home=fallback_home;
     }
 
@@ -145,56 +156,88 @@ static int interactive_setup()
 
     /* URL input */
     while(1){
-        printf("Enter qBittorrent URL (default http://localhost): ");
+        printf("Enter qBittorrent IP (default localhost): ");
         fflush(stdout);
+
         if(fgets(tmp_url,sizeof(tmp_url),stdin)){
             size_t l=strlen(tmp_url);
             if(l && tmp_url[l-1]=='\n') tmp_url[l-1]=0;
+
             if(strcmp(tmp_url,"q")==0) return 0;
-            if(strlen(tmp_url)==0) safe_strncpy(tmp_url,"http://localhost",sizeof(tmp_url));
-                break;
+
+            if(strlen(tmp_url)==0)
+                safe_strncpy(tmp_url,"http://localhost",sizeof(tmp_url));
+
+            break;
         }
+    }
+
+    /* Ensure URL has scheme */
+    if(strncmp(tmp_url,"http://",7)!=0 && strncmp(tmp_url,"https://",8)!=0){
+        char fixed[256]={0};
+        snprintf(fixed,sizeof(fixed),"http://%s",tmp_url);
+        safe_strncpy(tmp_url,fixed,sizeof(tmp_url));
     }
 
     /* Port input */
     char portbuf[16]={0};
+
     printf("Enter port (default 8080): ");
     fflush(stdout);
+
     if(fgets(portbuf,sizeof(portbuf),stdin)){
         size_t l=strlen(portbuf);
         if(l && portbuf[l-1]=='\n') portbuf[l-1]=0;
+
         if(strcmp(portbuf,"q")==0) return 0;
-        if(strlen(portbuf)==0) strcat(tmp_url,":8080");
-        else { strcat(tmp_url,":"); strcat(tmp_url,portbuf); }
+
+        if(strlen(portbuf)==0)
+            strcat(tmp_url,":8080");
+        else{
+            strcat(tmp_url,":");
+            strcat(tmp_url,portbuf);
+        }
     }
 
     /* Username */
     printf("Enter username (default admin): ");
     fflush(stdout);
+
     if(fgets(tmp_user,sizeof(tmp_user),stdin)){
         size_t l=strlen(tmp_user);
         if(l && tmp_user[l-1]=='\n') tmp_user[l-1]=0;
+
         if(strcmp(tmp_user,"q")==0) return 0;
-        if(strlen(tmp_user)==0) safe_strncpy(tmp_user,"admin",sizeof(tmp_user));
+
+        if(strlen(tmp_user)==0)
+            safe_strncpy(tmp_user,"admin",sizeof(tmp_user));
     }
 
     /* Password (hidden) */
     struct termios oldt,newt;
+
     tcgetattr(STDIN_FILENO,&oldt);
     newt=oldt;
     newt.c_lflag&=~ECHO;
+
     tcsetattr(STDIN_FILENO,TCSANOW,&newt);
+
     printf("Enter password (empty allowed): ");
     fflush(stdout);
-    if(fgets(tmp_pass,sizeof(tmp_pass),stdin)) {
+
+    if(fgets(tmp_pass,sizeof(tmp_pass),stdin)){
         size_t l=strlen(tmp_pass);
         if(l && tmp_pass[l-1]=='\n') tmp_pass[l-1]=0;
+
         if(strcmp(tmp_pass,"q")==0){
             tcsetattr(STDIN_FILENO,TCSANOW,&oldt);
             printf("\n");
             return 0;
         }
-    } else tmp_pass[0]=0;
+    }
+    else
+        tmp_pass[0]=0;
+
     tcsetattr(STDIN_FILENO,TCSANOW,&oldt);
     printf("\n");
 
@@ -203,68 +246,110 @@ static int interactive_setup()
     safe_strncpy(creds.qbt_user,tmp_user,sizeof(creds.qbt_user));
     safe_strncpy(creds.qbt_pass,tmp_pass,sizeof(creds.qbt_pass));
 
-    /* Create ~/.qbtctl dir + auth file path safely */
+    /* Create ~/.qbtctl dir */
     char dir[512]={0};
     size_t max_home_len = sizeof(dir)-strlen(DEFAULT_AUTH_DIR)-1;
-    if(strlen(home) > max_home_len){
-        ERR("Home path too long, cannot create auth dir");
+
+    if(strlen(home)>max_home_len){
+        ERR("Home path too long");
         return 0;
     }
+
     snprintf(dir,sizeof(dir),"%.*s%s",(int)max_home_len,home,DEFAULT_AUTH_DIR);
     dir[sizeof(dir)-1]=0;
 
     struct stat st;
-    if(stat(dir,&st)!=0) mkdir(dir,0700);
+    if(stat(dir,&st)!=0)
+        mkdir(dir,0700);
 
     char save_path[512]={0};
     size_t max_dir_len = sizeof(save_path)-strlen(DEFAULT_AUTH_FILE)-2;
-    if(strlen(dir) > max_dir_len){
-        ERR("Auth dir path too long, cannot create auth file path");
+
+    if(strlen(dir)>max_dir_len){
+        ERR("Auth path too long");
         return 0;
     }
+
     snprintf(save_path,sizeof(save_path),"%.*s/%s",(int)max_dir_len,dir,DEFAULT_AUTH_FILE);
     save_path[sizeof(save_path)-1]=0;
 
-    /* Save auth file */
     if(!save_auth_file(save_path)){
-        ERR("Failed to save auth file to %s",save_path);
+        ERR("Failed to save auth file");
         printf("+------------------------------------------+\n");
         return 0;
     }
 
     printf("+------------------------------------------+\n");
-    printf("Auth saved to: %s\n", save_path);
     printf("URL:      [%s]\n", creds.qbt_url);
     printf("User:     [%s]\n", creds.qbt_user);
     printf("Password: [******]\n");
+    printf("Auth saved to: %s\n", save_path);
     printf("+------------------------------------------+\n");
 
-    /* Test connection */
+    /* Test connection using real login */
     CURL *curl = curl_easy_init();
-    if(!curl){ ERR("CURL init failed"); return 0; }
+    if(!curl){
+        ERR("CURL init failed");
+        return 0;
+    }
 
-    char test_url[512]={0};
-    snprintf(test_url,sizeof(test_url),"%s/api/v2/app/version",creds.qbt_url);
+    char login_url[512]={0};
+    snprintf(login_url,sizeof(login_url),"%s/api/v2/auth/login",tmp_url);
 
-    curl_easy_setopt(curl,CURLOPT_URL,test_url);
-    curl_easy_setopt(curl,CURLOPT_USERNAME,creds.qbt_user);
-    curl_easy_setopt(curl,CURLOPT_PASSWORD,creds.qbt_pass);
-    curl_easy_setopt(curl,CURLOPT_NOPROGRESS,1L);
-    curl_easy_setopt(curl,CURLOPT_NOBODY,1L);
+    char post[256]={0};
+    snprintf(post,sizeof(post),
+             "username=%s&password=%s",
+             tmp_user,tmp_pass);
 
-    CURLcode res = curl_easy_perform(curl);
+    curl_easy_setopt(curl, CURLOPT_URL, login_url);
+    curl_easy_setopt(curl, CURLOPT_POSTFIELDS, post);
+    curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 1L);
+
+    /* capture response */
+    char resp[64]={0};
+
+    struct {
+        char *buf;
+        size_t size;
+    } wr = { resp, sizeof(resp)-1 };
+
+    size_t write_cb(void *ptr,size_t size,size_t nmemb,void *userdata){
+        size_t total=size*nmemb;
+        struct { char *buf; size_t size; } *w=userdata;
+
+        size_t copy = total < w->size ? total : w->size;
+        memcpy(w->buf,ptr,copy);
+        w->buf[copy]=0;
+        return total;
+    }
+
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_cb);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &wr);
+
+    CURLcode res=curl_easy_perform(curl);
+
+    printf("Connection: ");
     if(res!=CURLE_OK){
-        ERR("Connection test failed: %s", curl_easy_strerror(res));
+        printf("[Failed %s\n]",curl_easy_strerror(res));
+        printf("+------------------------------------------+\n");
         curl_easy_cleanup(curl);
         return 0;
     }
+
     curl_easy_cleanup(curl);
-    printf("Connection successful!\n");
+
+    /* verify login result */
+    if(strncmp(resp,"Ok",2)!=0){
+        printf("[Auth Failed]\n");
+        printf("+------------------------------------------+\n");
+        return 0;
+    }
+
+    printf("[OK]\n");
     printf("+------------------------------------------+\n");
 
-    return 1;
+   return 1;
 }
-
 /*================ INIT AUTH =================*/
 bool init_auth(int argc,char **argv)
 {
@@ -301,5 +386,5 @@ bool init_auth(int argc,char **argv)
     if(creds.qbt_pass[0]==0 && password_empty_flag==0) safe_strncpy(creds.qbt_pass,"admin",sizeof(creds.qbt_pass));
     if(creds.qbt_url[0]==0) safe_strncpy(creds.qbt_url,"http://localhost:8080",sizeof(creds.qbt_url));
 
-        return true;
+    return true;
 }
