@@ -17,7 +17,7 @@ Lightweight yet powerful — perfect for scripting or managing your qBittorrent 
 
 Download the latest precompiled binary:
 
-https://github.com/creptic/qbtctl/releases/download/v0.99/qbtctl
+https://github.com/creptic/qbtctl/releases/latest/download/qbtctl
 
 or see the latest release packages.
 
