@@ -215,3 +215,8 @@ gcc -O2 -static -s \
 -lcurl -lsodium -lz -lm -ldl -lpthread
 "
 ```
+# Notes
+- Not tested with SSL, I added some code but needs testing.
+- Special thank you to the cJSON drop in from https://github.com/DaveGamble/cJSON
+
+---
