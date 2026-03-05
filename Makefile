@@ -1,15 +1,22 @@
-# ================= CONFIG =================
-CC      := cc
-CFLAGS  := -Wall -Wextra -O2
-TARGET  := qbtctl
-SRCS    := qbtctl.c auth.c help.c cJSON.c
+# Simple Makefile for qbtctl (dynamic linking)
 
-# ================= BUILD =================
+CC := gcc
+CFLAGS := -O2 -Wall -Wextra -Wno-unused-function
+LDFLAGS := -lcurl -lsodium
+
+SRC := $(wildcard *.c)
+OBJ := $(SRC:.c=.o)
+TARGET := qbtctl
+
+.PHONY: all clean
+
 all: $(TARGET)
 
-$(TARGET): $(SRCS)
-	$(CC) $(CFLAGS) $(SRCS) -lcurl -o $(TARGET)
+$(TARGET): $(OBJ)
+	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
 
-# ================= CLEAN =================
+%.o: %.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
 clean:
-	rm -f $(TARGET)
+	rm -f $(OBJ) $(TARGET)

@@ -1575,6 +1575,7 @@ int main(int argc, char **argv)
     /* ================= INIT CURL ================= */
     curl_global_init(CURL_GLOBAL_DEFAULT);
     CURL *curl = curl_easy_init();
+
     if (!curl) return EXIT_LOGIN_FAIL;
 
     /* Enable HTTPS automatically if URL starts with https:// */
