@@ -93,7 +93,7 @@ Run:
 
 You will be prompted for:
 
-- qBittorrent URL (default: http://localhost)
+- qBittorrent URL (default: `http://localhost`)
 - Port (default: 8080)
 - Username (default: admin)
 - Password (empty allowed)
