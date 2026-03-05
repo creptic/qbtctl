@@ -149,7 +149,10 @@ Usage:
 ## Compiling static link with Docker (cd into the source dir)
 ```
 docker run --rm -v $(pwd):/out alpine:latest /bin/sh -c "
-    apk add --no-cache build-base musl-dev zlib-static pkgconf wget tar &&
+    # Install build tools and dependencies
+    apk add --no-cache build-base musl-dev zlib-static pkgconf wget tar libsodium-dev libsodium-static &&
+    
+    # Build curl statically
     cd /tmp &&
     wget https://curl.se/download/curl-8.17.0.tar.gz &&
     tar xzf curl-8.17.0.tar.gz &&
@@ -158,7 +161,15 @@ docker run --rm -v $(pwd):/out alpine:latest /bin/sh -c "
                 --disable-ftp --disable-file --disable-dict --disable-telnet --disable-pop3 --disable-imap \
                 --disable-smtp --disable-gopher --disable-manual --disable-psl --without-libpsl &&
     make -j\$(nproc) &&
+
+    # Build qbtctl statically
     cd /out &&
-    gcc -O2 -static -s -I/tmp/curl-8.17.0/include -L/tmp/curl-8.17.0/lib/.libs -o qbtctl *.c -lcurl -lz
+    gcc -O2 -static -s \
+        -I/tmp/curl-8.17.0/include \
+        -I/usr/include \
+        -L/tmp/curl-8.17.0/lib/.libs \
+        -L/usr/lib \
+        -o qbtctl *.c \
+        -lcurl -lsodium -lz -lm -ldl -lpthread
 "
 ```
