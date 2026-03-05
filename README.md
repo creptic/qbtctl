@@ -124,7 +124,7 @@ You may override credentials when running commands:
 | -i, --setup | Setup server credentials interactively |
 | -c <path> | Alternate auth.txt path |
 | -r, --raw | Raw output mode (bytes, seconds, true/false) |
-| --url <url> | qBittorrent WebUI URL (ex: http://localhost:8080) |
+| --url <url> | qBittorrent WebUI URL (ex: `http://localhost:8080`) |
 | --user <user> | qBittorrent username (default: admin) |
 | --pass <pass> | qBittorrent password (NULL allowed) |
 | -h, --hash <hash> | Torrent hash (minimum 6 characters) |
