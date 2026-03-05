@@ -11,7 +11,7 @@ It allows you to manage torrents directly from the terminal, supporting operatio
 Designed to be **compact, single-binary, and portable**, easy to compile and deploy.  
 Lightweight, yet powerful — perfect for scripting or managing your qBittorrent instance from the terminal.
 
-Download the latest precompiled binary: [qbtctl](https://github.com/creptic/qbtctl/releases/download/v1.0/qbtctl)
+Download the latest precompiled binary: [qbtctl](https://github.com/creptic/qbtctl/releases/download/v0.99/qbtctl)
 or see latest package.
 
 ---
