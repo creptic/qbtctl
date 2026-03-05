@@ -15,11 +15,14 @@ Designed to be **compact, single-binary, and portable**, making it easy to compi
 
 Lightweight yet powerful — perfect for scripting or managing your qBittorrent instance from the terminal.
 
-Download the latest precompiled binary:
+## 📥 Download
 
+Download the latest **precompiled binary (x86 / x86_64 Linux)**
+```bash
+wget https://github.com/creptic/qbtctl/releases/latest/download/qbtctl
+chmod +x qbtctl
+```
 https://github.com/creptic/qbtctl/releases/latest/download/qbtctl
-
-or see the latest release packages.
 
 ---
 
@@ -77,8 +80,9 @@ Command-line credentials **always override auth.txt**.
 If no auth file is found, defaults are used:
 
 ```
+url: http://localhost:8080
 username: admin
-password: (empty)
+password: admin
 ```
 
 ---
@@ -132,7 +136,7 @@ You may override credentials when running commands:
 | -c, --show-all-clean | Show torrents info (borderless output) |
 | -aj, --show-all-json | Show all torrents info as JSON |
 | -s, --show-single | Show single torrent info (requires hash) |
-| -sj, --show-single-json | Show single torrent info as JSON |
+| -sj, --show-single-json | Show single torrent info as JSON  (requires hash) |
 
 ---
 
