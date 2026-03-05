@@ -1,5 +1,4 @@
 # qbtctl
----
 **qbtctl** is a minimal, ultra fast command-line interface for controlling [qBittorrent](https://www.qbittorrent.org/) via its Web API.  
 
 It allows you to manage torrents directly from the terminal, supporting operations like:  
@@ -35,7 +34,6 @@ make
 ./qbtctl --setup  
 ```
 ## Authentication Setup
----
 `qbtctl` requires your qBittorrent Web API credentials to function. You can set them up interactively or pass them via CLI flags.
 
 Checks for auth.txt the in the following order;
@@ -46,7 +44,7 @@ Checks for auth.txt the in the following order;
 - If no auth.txt is found, it will use the defaults with admin as password.
 
 ## Interactive Setup
----
+
 Run:
 ```bash
 ./qbtctl --setup
@@ -63,8 +61,8 @@ You can also specify a custom path for the auth file. By default, credentials ar
 ~/.qbtctl/auth.txt
 ```
 
-### Command-Line Overrides
----
+## Command-Line Overrides
+
 - You can override stored credentials directly when running commands:
 
 ```bash
@@ -72,7 +70,7 @@ You can also specify a custom path for the auth file. By default, credentials ar
 ```
 
 ## Options
----
+
 | Option | Description |
 |------|-------------|
 | `--help` | Show help message |
@@ -89,8 +87,8 @@ You can also specify a custom path for the auth file. By default, credentials ar
 | `-s, --show-single` | Show basic single torrent info (requires hash) |
 | `-sj, --show-single-json` | Show single torrent info as JSON (requires hash) |
 
-### Actions (requires hash) (per torrent)
----
+## Actions (requires hash) (per torrent)
+
 | Command | Description |
 |--------|-------------|
 | `-am <path>`, `--move <path>` | Move torrent to `<path on server>` *(use with caution)* |
@@ -101,7 +99,7 @@ You can also specify a custom path for the auth file. By default, credentials ar
 | `-ad`, `--delete` | Stop, remove and **delete torrent and data** *(use with caution)* |
 
 ## Getters (requires --hash <hash>)
----
+
 | Command | Standard Output | -r / --raw Output |
 |---------|-----------------|-------------------|
 | -gn, --get-name | Ubuntu.ISO | "Ubuntu.ISO" |
@@ -122,7 +120,7 @@ You can also specify a custom path for the auth file. By default, credentials ar
 | -gst, --get-status | ForcedUP | "ForcedUP" |
 
 ## Setters (requires --hash <hash>)
----
+
 | Command | Standard Input | -r / --raw Input |
 |---------|----------------|------------------|
 | -sc <cat>, --set-category <cat> | Linux | Linux |
@@ -163,5 +161,6 @@ docker run --rm -v $(pwd):/out alpine:latest /bin/sh -c "
         -o qbtctl *.c \
         -lcurl -lsodium -lz -lm -ldl -lpthread
 "
+---
 ```
 ---
