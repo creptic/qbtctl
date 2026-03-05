@@ -14,6 +14,8 @@
 
 #define DEFAULT_AUTH_DIR "/.qbtctl"
 #define DEFAULT_AUTH_FILE "auth.txt"
+#define NO_CREDS_MARKER "__NO_CREDS__"
+
 #ifndef ERR
 #define ERR(fmt, ...) fprintf(stderr,"[ERROR] " fmt "\n",##__VA_ARGS__)
 #endif
@@ -62,7 +64,7 @@ static int save_auth_file(const char *path)
     memcpy(key,"qbtkeyqbtkeyqbtkeyqbtkeyqbtkey12",crypto_secretbox_KEYBYTES);
 
     char hex_cipher[256]={0};
-    if(strlen(creds.qbt_pass) > 0){
+    if(strlen(creds.qbt_pass) > 0 && strcmp(creds.qbt_pass,NO_CREDS_MARKER)!=0){
         size_t pass_len = strlen(creds.qbt_pass);
         unsigned char nonce[crypto_secretbox_NONCEBYTES]={0};
         unsigned char cipher[128]={0};
@@ -133,8 +135,14 @@ static size_t discard_write(void *ptr, size_t size, size_t nmemb, void *userdata
     return size*nmemb;  // tell curl we handled all bytes
 }
 
+/* Helper: check if login is actually possible */
+bool can_attempt_login(void){
+    return (creds.qbt_user[0]!=0 && creds.qbt_pass[0]!=0 && creds.qbt_url[0]!=0
+    && strcmp(creds.qbt_pass,NO_CREDS_MARKER)!=0);
+}
 
 /* INTERACTIVE SETUP */
+/* ----------------- Interactive Setup ----------------- */
 static int interactive_setup()
 {
     char tmp_url[256]={0}, tmp_user[64]={0}, tmp_pass[64]={0};
@@ -143,10 +151,8 @@ static int interactive_setup()
 
     if(!home){
         const char *env_user=getenv("USER");
-        if(env_user && env_user[0])
-            snprintf(fallback_home,sizeof(fallback_home),"/home/%s",env_user);
-        else
-            snprintf(fallback_home,sizeof(fallback_home),".");
+        if(env_user && env_user[0]!=0) snprintf(fallback_home,sizeof(fallback_home),"/home/%s",env_user);
+        else snprintf(fallback_home,sizeof(fallback_home),".");
         home=fallback_home;
     }
 
@@ -155,9 +161,8 @@ static int interactive_setup()
 
     /* URL input */
     while(1){
-        printf("Enter qBittorrent IP (default localhost): ");
+        printf("qBittorrent IP (default localhost): ");
         fflush(stdout);
-
         if(fgets(tmp_url,sizeof(tmp_url),stdin)){
             size_t l=strlen(tmp_url);
             if(l && tmp_url[l-1]=='\n') tmp_url[l-1]=0;
@@ -167,7 +172,7 @@ static int interactive_setup()
         }
     }
 
-    /* Ensure URL has scheme */
+    /* Ensure scheme */
     if(strncmp(tmp_url,"http://",7)!=0 && strncmp(tmp_url,"https://",8)!=0){
         char fixed[256]={0};
         snprintf(fixed,sizeof(fixed),"http://%s",tmp_url);
@@ -176,7 +181,7 @@ static int interactive_setup()
 
     /* Port input */
     char portbuf[16]={0};
-    printf("Enter port (default 8080): ");
+    printf("Port (default 8080): ");
     fflush(stdout);
     if(fgets(portbuf,sizeof(portbuf),stdin)){
         size_t l=strlen(portbuf);
@@ -186,8 +191,8 @@ static int interactive_setup()
         else { strcat(tmp_url,":"); strcat(tmp_url,portbuf); }
     }
 
-    /* Username */
-    printf("Enter username (default admin): ");
+    /* Username input */
+    printf("User (default admin): ");
     fflush(stdout);
     if(fgets(tmp_user,sizeof(tmp_user),stdin)){
         size_t l=strlen(tmp_user);
@@ -196,72 +201,35 @@ static int interactive_setup()
         if(strlen(tmp_user)==0) safe_strncpy(tmp_user,"admin",sizeof(tmp_user));
     }
 
-    /* Password (hidden) */
+    /* Password input (cannot be blank) */
     struct termios oldt,newt;
     tcgetattr(STDIN_FILENO,&oldt);
     newt=oldt;
     newt.c_lflag&=~ECHO;
     tcsetattr(STDIN_FILENO,TCSANOW,&newt);
 
-    printf("Enter password (empty allowed): ");
+    printf("Enter password (cannot be blank): ");
     fflush(stdout);
     if(fgets(tmp_pass,sizeof(tmp_pass),stdin)){
         size_t l=strlen(tmp_pass);
         if(l && tmp_pass[l-1]=='\n') tmp_pass[l-1]=0;
-        if(strcmp(tmp_pass,"q")==0){
+        if(strcmp(tmp_pass,"q")==0 || strlen(tmp_pass)==0){
             tcsetattr(STDIN_FILENO,TCSANOW,&oldt);
-            printf("\n");
-            return 0;
+            printf("\n[No password entered, exiting without saving]\n");
+            printf("+------------------------------------------+\n");
+            exit(1);
         }
-    } else tmp_pass[0]=0;
+    } else {
+        tcsetattr(STDIN_FILENO,TCSANOW,&oldt);
+        printf("\n[No password entered, exiting without saving]\n");
+        printf("+------------------------------------------+\n");
+        exit(1);
+    }
 
     tcsetattr(STDIN_FILENO,TCSANOW,&oldt);
     printf("\n");
 
-    /* Test login using input values */
-    CURL *curl = curl_easy_init();
-    if(!curl){ ERR("CURL init failed"); return 0; }
-
-    char login_url[512]={0};
-    snprintf(login_url,sizeof(login_url),"%s/api/v2/auth/login",tmp_url);
-
-    char post[256]={0};
-    snprintf(post,sizeof(post),"username=%s&password=%s",tmp_user,tmp_pass);
-
-    char resp[64]={0};
-    struct { char *buf; size_t size; } wr = { resp, sizeof(resp)-1 };
-
-    size_t write_cb(void *ptr,size_t size,size_t nmemb,void *userdata){
-        size_t total=size*nmemb;
-        struct { char *buf; size_t size; } *w=userdata;
-        size_t copy = total < w->size ? total : w->size;
-        memcpy(w->buf,ptr,copy);
-        w->buf[copy]=0;
-        return total;
-    }
-
-    curl_easy_setopt(curl, CURLOPT_URL, login_url);
-    curl_easy_setopt(curl, CURLOPT_POSTFIELDS, post);
-    curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 1L);
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_cb);
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &wr);
-
-    CURLcode res=curl_easy_perform(curl);
-    curl_easy_cleanup(curl);
-
-    if(res!=CURLE_OK){
-        ERR("Connection failed: %s", curl_easy_strerror(res));
-        return 0;
-    }
-
-    if(strncmp(resp,"Ok",2)!=0){
-        ERR("Authentication failed with provided credentials");
-        return 0;
-    }
-
-    printf("[Login Successful]\n");
-
-    /* Copy values to creds struct */
+    /* Copy values to creds */
     safe_strncpy(creds.qbt_url,tmp_url,sizeof(creds.qbt_url));
     safe_strncpy(creds.qbt_user,tmp_user,sizeof(creds.qbt_user));
     safe_strncpy(creds.qbt_pass,tmp_pass,sizeof(creds.qbt_pass));
@@ -276,39 +244,39 @@ static int interactive_setup()
 
     if(!save_auth_file(save_path)){
         ERR("Failed to save auth file");
+
+        printf("+------------------------------------------+\n");
         return 0;
     }
 
-    printf("Auth saved to: %s\n", save_path);
+    printf("[Saved to: %s]\n", save_path);
+
+    printf("+------------------------------------------+\n");
     return 1;
 }
-/*================ INIT AUTH =================*/
-bool init_auth(int argc,char **argv)
+
+/* ----------------- INIT AUTH ----------------- */
+bool init_auth(int argc, char **argv)
 {
     char cli_user[64]={0}, cli_pass[64]={0}, cli_url[256]={0};
-    int password_empty_flag_local=0;
     char *config_path=NULL;
+    int loaded=0;
 
     /* parse CLI args */
     for(int i=1;i<argc;i++){
         if(strcmp(argv[i],"-i")==0 || strcmp(argv[i],"--setup")==0){
             interactive_setup();
             exit(0);
-        }
-        else if(strcmp(argv[i],"--user")==0 && i+1<argc){
+        } else if(strcmp(argv[i],"--user")==0 && i+1<argc){
             safe_strncpy(cli_user,argv[i+1],sizeof(cli_user));
             i++;
-        }
-        else if(strcmp(argv[i],"--pass")==0 && i+1<argc){
+        } else if(strcmp(argv[i],"--pass")==0 && i+1<argc){
             safe_strncpy(cli_pass,argv[i+1],sizeof(cli_pass));
-            if(strlen(argv[i+1])==0) password_empty_flag_local=1;
             i++;
-        }
-        else if(strcmp(argv[i],"--url")==0 && i+1<argc){
+        } else if(strcmp(argv[i],"--url")==0 && i+1<argc){
             safe_strncpy(cli_url,argv[i+1],sizeof(cli_url));
             i++;
-        }
-        else if(strcmp(argv[i],"-c")==0){
+        } else if(strcmp(argv[i],"-c")==0){
             if(i+1>=argc){
                 ERR("Option -c requires a file path argument");
                 exit(1);
@@ -318,47 +286,39 @@ bool init_auth(int argc,char **argv)
         }
     }
 
-    int loaded=0;
-
-    /* 1. -c has absolute priority */
+    /* 1. -c has highest priority */
     if(config_path){
-        if(load_auth_file(config_path)){
-            loaded=1;
-        } else {
+        if(load_auth_file(config_path)) loaded=1;
+        else{
             ERR("Failed to load config from -c path: %s", config_path);
-            exit(1);  // enforce that -c must exist and be readable
+            exit(1);
         }
     }
 
-    /* 2. auth.txt in current directory, only if -c not used */
-    if(!loaded && load_auth_file(DEFAULT_AUTH_FILE)){
-        loaded=1;
-    }
+    /* 2. auth.txt in current directory */
+    if(!loaded && load_auth_file(DEFAULT_AUTH_FILE)) loaded=1;
 
     /* 3. ~/.qbtctl/auth.txt */
     if(!loaded){
         const char *home=getenv("HOME");
         if(!home){
             struct passwd *pw=getpwuid(getuid());
-            home=pw?pw->pw_dir:".";
+            home = pw ? pw->pw_dir : "/tmp";
         }
         char home_path[512]={0};
         snprintf(home_path,sizeof(home_path),"%s%s/%s",home,DEFAULT_AUTH_DIR,DEFAULT_AUTH_FILE);
         if(load_auth_file(home_path)) loaded=1;
     }
 
-    /* 4. Defaults if nothing loaded */
-    if(!loaded){
-        safe_strncpy(creds.qbt_user,"admin",sizeof(creds.qbt_user));
-        safe_strncpy(creds.qbt_pass,"admin",sizeof(creds.qbt_pass));
-        safe_strncpy(creds.qbt_url,"http://localhost:8080",sizeof(creds.qbt_url));
-    }
-
-    /* 5. CLI args override everything */
+    /* 4. CLI args override everything */
     if(cli_user[0]!=0) safe_strncpy(creds.qbt_user,cli_user,sizeof(creds.qbt_user));
     if(cli_pass[0]!=0) safe_strncpy(creds.qbt_pass,cli_pass,sizeof(creds.qbt_pass));
-    else if(password_empty_flag_local) creds.qbt_pass[0]=0;
     if(cli_url[0]!=0) safe_strncpy(creds.qbt_url,cli_url,sizeof(creds.qbt_url));
 
+    /* 5. Final check: must have non-empty password */
+    if(!can_attempt_login()){
+        printf("[No credentials supplied, exiting without attempting login]\n");
+        exit(1);
+    }
     return true;
 }
