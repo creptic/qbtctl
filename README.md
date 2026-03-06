@@ -7,7 +7,7 @@
 It allows you to manage torrents directly from the terminal, supporting operations such as:
 
 - Pausing, resuming, stopping, and removing torrents  
-- Setting categories, tags, and sequential download  
+- Setting categories, tags, sequential download, and superseeding 
 - Monitoring torrent upload/download limits, state, and seed time  
 - Interactive authentication setup or command-line credentials  
 
@@ -39,7 +39,7 @@ A Makefile is included.
 
 Compile with:
 
-```
+```bash
 make
 ```
 
@@ -51,7 +51,7 @@ For a portable **static build**, see the Docker section below.
 
 Clone the repository:
 
-```
+```bash
 git clone https://github.com/creptic/qbtctl.git
 cd qbtctl
 make
@@ -66,32 +66,21 @@ make
 
 Credentials can be provided:
 
-- via **auth.txt**
-- via **command-line arguments**
+- via **auth.txt** (or a file saved with --setup using then using -c filename)
+- via **command-line arguments** (overides file credentials)
 
 Auth file search order:
 
 1. `~/.qbtctl/auth.txt`
 2. `./auth.txt` (inside the qbtctl directory)
 3. Custom path using `-c <path>`
-
-Command-line credentials **always override auth.txt**.
-
-If no auth file is found, defaults are used:
-
-```
-url: http://localhost:8080
-username: admin
-password: admin
-```
-
 ---
 
 # Interactive Setup
 
 Run:
 
-```
+```bash
 ./qbtctl --setup
 ```
 
@@ -100,21 +89,23 @@ You will be prompted for:
 - qBittorrent URL (default: `http://localhost`)
 - Port (default: 8080)
 - Username (default: admin)
-- Password (empty allowed)
+- Password (cannot be empty)
 
-Credentials are saved to:
+Note: To save to program directory just type ```auth.txt``` or alternate filename, when saving in -i or --setup
 
-```
+- Use full filename when saving, it will not create if pointed to a directory only.
+      
+By default credentials are saved to:
+```text
 ~/.qbtctl/auth.txt
 ```
-
 ---
 
 # Command-Line Overrides
 
 You may override credentials when running commands:
 
-```
+```bash
 ./qbtctl --url http://host:8080 --user admin --pass mypass [command]
 ```
 
@@ -122,73 +113,73 @@ You may override credentials when running commands:
 
 # Options
 
-| Option | Description |
-|------|-------------|
-| --help | Show help message |
-| -i, --setup | Setup server credentials interactively |
-| -c <path> | Alternate auth.txt path |
-| -r, --raw | Raw output mode (bytes, seconds, true/false) |
-| --url <url> | qBittorrent WebUI URL (ex: `http://localhost:8080`) |
-| --user <user> | qBittorrent username (default: admin) |
-| --pass <pass> | qBittorrent password (NULL allowed) |
-| -h, --hash <hash> | Torrent hash (minimum 6 characters) |
-| -a, --show-all | Show basic torrent info for all torrents |
-| -c, --show-all-clean | Show torrents info (borderless output) |
-| -aj, --show-all-json | Show all torrents info as JSON |
-| -s, --show-single | Show single torrent info (requires hash) |
-| -sj, --show-single-json | Show single torrent info as JSON  (requires hash) |
+```bash
+--help                   Show help message
+-i, --setup              Setup server credentials interactively
+-c <path>                Alternate auth file path
+-r, --raw                Raw output mode (bytes, seconds, true/false)
+--url <url>              qBittorrent WebUI URL (ex: http://localhost:8080)
+--user <user>            qBittorrent username (default: admin)
+--pass <pass>            qBittorrent password (NULL allowed)
+-h, --hash <hash>        Torrent hash (minimum 6 characters)
+-a, --show-all           Show basic torrent info for all torrents
+-c, --show-all-clean     Show torrents info (borderless output)
+-aj, --show-all-json     Show all torrents info as JSON
+-s, --show-single        Show single torrent info (requires hash)
+-sj, --show-single-json  Show single torrent info as JSON (requires hash)
+```
 
 ---
 
 # Actions (requires --hash)
 
-| Command | Description |
-|--------|-------------|
-| -am <path>, --move <path> | Move torrent to `<path>` on the server |
-| -as, --start | Start torrent |
-| -af, --force-start | Force start torrent |
-| -ap, --pause | Pause or stop torrent |
-| -ar, --remove | Stop and remove torrent (keeps data) |
-| -ad, --delete | Stop, remove, and delete torrent and data |
+```bash
+-am <path>, --move <path>  Move torrent to <path> on the server
+-as, --start               Start torrent
+-af, --force-start         Force start torrent
+-ap, --pause               Pause or stop torrent
+-ar, --remove              Stop and remove torrent (keeps data)
+-ad, --delete              Stop, remove, and delete torrent and data
+```
 
 ---
 
 # Getters (requires --hash)
 
-| Command | Standard Output | --raw Output |
-|--------|-----------------|-------------|
-| -gn, --get-name | Ubuntu.ISO | "Ubuntu.ISO" |
-| -gt, --get-tags | Linux,ISO | ["Linux","ISO"] |
-| -gc, --get-category | Linux ISOs | "Linux ISOs" |
-| -gu, --get-up-limit | 512 (KB/s) | 524288 (bytes) |
-| -gd, --get-dl-limit | 1024 (KB/s) | 1048576 (bytes) |
-| -gdp, --get-dl-path | /downloads/linux/iso.iso | "/downloads/linux/iso.iso" |
-| -gr, --get-ratio | 2.0 | 2.0 |
-| -gs, --get-seedtime | 12:34:56 | 45296 |
-| -gsl, --get-seedtime-limit | 24:00:00 | 86400 |
-| -gsd, --get-seqdl | 0 (1=ON,0=OFF) | false |
-| -gat, --get-autotmm | 0 (1=ON,0=OFF) | false |
-| -gss, --get-superseed | 1 (1=ON,0=OFF) | true |
-| -gtr, --get-tracker | tracker.example.com | "tracker.example.com:port/announce" |
-| -gtl, --get-tracker-list | tracker1,tracker2 | ["udp.tracker1:port","tracker2:port"] |
-| -gp, --get-private | 1 (1=YES,0=NO) | true |
-| -gst, --get-status | ForcedUP | "ForcedUP" |
+```bash
+# Command                   Standard Output              --raw Output
+-gn, --get-name             Ubuntu.ISO                   "Ubuntu.ISO"
+-gt, --get-tags             Linux,ISO                    ["Linux","ISO"]
+-gc, --get-category         Linux ISOs                   "Linux ISOs"
+-gu, --get-up-limit         512 (KB/s)                   524288
+-gd, --get-dl-limit         1024 (KB/s)                  1048576
+-gdp, --get-dl-path         /downloads/linux/iso.iso     "/downloads/linux/iso.iso"
+-gr, --get-ratio            2.0                          2.0
+-gs, --get-seedtime         12:34:56                     45296
+-gsl,--get-seedtime-limit   24:00:00                     86400
+-gsd, --get-seqdl           0 (OFF)                      false
+-gat, --get-autotmm         0 (OFF)                      false
+-gss, --get-superseed       1 (ON)                       true
+-gtr, --get-tracker         tracker.example.com          "tracker.example.com:port/announce"
+-gtl, --get-tracker-list    tracker1,tracker2            ["udp.tracker1:port","tracker2:port"]
+-gp, --get-private          1 (YES)                      true
+-gst, --get-status          ForcedUP                     "ForcedUP"
+```
 
 ---
-
 # Setters (requires --hash)
-
-| Command | Standard Input | --raw Input |
-|--------|---------------|-------------|
-| -sc <cat>, --set-category <cat> | Linux | Linux |
-| -st <tag>, --set-tags <tag> | Linux,ISO | Linux,ISO |
-| -sul <#>, --set-up-limit <#> | 512 (KB/s) | 524288 |
-| -sdl <#>, --set-dl-limit <#> | 1024 (KB/s) | 1048576 |
-| -srl <#>, --set-ratio-limit <#> | 2.0 | 2.0 |
-| -sst <#>, --set-seedtime-limit <#> | 24:00:00 | 86400 |
-| -ssd <val>, --set-seqdl <val> | 1 (1=ON,0=OFF) | true |
-| -sat <val>, --set-autotmm <val> | 0 (1=ON,0=OFF) | false |
-| -sss <val>, --set-superseed <val> | 0 (1=ON,0=OFF) | false |
+```bash
+# Command                             Standard Input  --raw Input
+-sc <cat>, --set-category <cat>       Linux           Linux
+-st <tag>, --set-tags <tag>           Linux,ISO       Linux,ISO
+-sul <#>, --set-up-limit <#>          512 (KB/s)      524288
+-sdl <#>, --set-dl-limit <#>          1024 (KB/s)     1048576
+-srl <#>, --set-ratio-limit <#>       2.0             2.0
+-sst <#>, --set-seedtime-limit <#>    24:00:00        86400
+-ssd <val>, --set-seqdl <val>         1 (ON)          true
+-sat <val>, --set-autotmm <val>       0 (OFF)         false
+-sss <val>, --set-superseed <val>     0 (OFF)         false
+```
 
 ---
 
@@ -196,7 +187,7 @@ You may override credentials when running commands:
 
 Run this inside the source directory:
 
-```
+```bash
 docker run --rm -v $(pwd):/out alpine:latest /bin/sh -c "
 apk add --no-cache build-base musl-dev zlib-static pkgconf wget tar libsodium-dev libsodium-static &&
 cd /tmp &&
@@ -215,8 +206,7 @@ gcc -O2 -static -s \
 -lcurl -lsodium -lz -lm -ldl -lpthread
 "
 ```
+
 # Notes
 - Not tested with SSL, I added some code but needs testing.
 - Special thank you to the cJSON drop in from https://github.com/DaveGamble/cJSON
-
----
