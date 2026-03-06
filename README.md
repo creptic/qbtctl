@@ -1,6 +1,8 @@
 # qbtctl
 [![Release](https://img.shields.io/github/v/release/creptic/qbtctl)](https://github.com/creptic/qbtctl/releases)
 [![Donate](https://img.shields.io/badge/Donate-PayPal-blue.svg)](https://www.paypal.com/paypalme/crepticdev)
+![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
+
 ---
 
 **qbtctl** is a minimal, ultra-fast command-line interface for controlling qBittorrent via its Web API.
