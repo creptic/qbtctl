@@ -31,6 +31,8 @@ https://github.com/creptic/qbtctl/releases/latest/download/qbtctl
 Most common commands and flags are listed in the [**Options**](#options) section below.  
 Refer there for full details and all available flags.
 
+---
+
 # Requirements for Compiling
 
 Before compiling `qbtctl`, ensure your system has:
