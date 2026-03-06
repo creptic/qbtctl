@@ -196,7 +196,7 @@ With raw JSON:
 ```
 
 ```json
-{"name":"Ubuntu.ISO","state":"ForcedUP","dl_limit":1048576,"ul_limit":524288,"ratio":2.0,"seed_time":45296,....etc}
+{"name":"Ubuntu.ISO","state":"stalledUP","dl_limit":1048576,"ul_limit":524288,"ratio":2.0,"seed_time":45296,....etc}
 ```
 
 ---
