@@ -53,7 +53,7 @@ Compile with:
 make
 ```
 
-For a portable **static build**, see the Docker section below.
+For a portable [**static build**](#static), see the Docker section below.
 
 ---
 
