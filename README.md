@@ -367,13 +367,12 @@ gcc -O2 -static -s \
 
 ```bash
 # Exit Codes for qbtctl
-0  EXIT_OK           # Success
-1  EXIT_AUTH_FAIL    # Authentication failed
-2  EXIT_BAD_ARGS     # Invalid command-line arguments
-3  EXIT_NETWORK      # Network or connection error
-4  EXIT_API_FAIL     # API request failed
-5  EXIT_FILE_ERROR   # File read/write failed
-```
+0  EXIT_OK            # Success
+1  EXIT_LOGIN_FAIL    # Authentication failed
+2  EXIT_FETCH_FAIL    # API fetch request failed
+3  EXIT_SET_FAIL      # API set request failed
+4  EXIT_BAD_ARGS      # Invalid command-line arguments
+``` 
 Usage Example:
 ```
 ./qbtctl -a
