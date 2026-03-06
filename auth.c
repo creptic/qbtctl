@@ -142,7 +142,6 @@ bool can_attempt_login(void){
 }
 
 /* INTERACTIVE SETUP */
-/* ----------------- Interactive Setup ----------------- */
 static int interactive_setup()
 {
     char tmp_url[256]={0}, tmp_user[64]={0}, tmp_pass[64]={0};
@@ -151,110 +150,152 @@ static int interactive_setup()
 
     if(!home){
         const char *env_user=getenv("USER");
-        if(env_user && env_user[0]!=0) snprintf(fallback_home,sizeof(fallback_home),"/home/%s",env_user);
-        else snprintf(fallback_home,sizeof(fallback_home),".");
+        if(env_user && env_user[0])
+            snprintf(fallback_home,sizeof(fallback_home),"/home/%s",env_user);
+        else
+            snprintf(fallback_home,sizeof(fallback_home),".");
         home=fallback_home;
     }
 
+    /* Step 1: URL */
     printf("+------------------------------------------+\n");
-    printf("Press 'q' then ENTER at any prompt to cancel.\n");
+    printf("| Step 1/6: Enter qBittorrent URL          |\n");
+    printf("| Include http:// or https://               |\n");
+    printf("| Default: http://localhost                 |\n");
+    printf("| Type 'quit' then ENTER to cancel          |\n");
+    printf("+------------------------------------------+\n");
+    printf("URL: ");
+    fflush(stdout);
 
-    /* URL input */
     while(1){
-        printf("qBittorrent IP (default localhost): ");
-        fflush(stdout);
         if(fgets(tmp_url,sizeof(tmp_url),stdin)){
             size_t l=strlen(tmp_url);
             if(l && tmp_url[l-1]=='\n') tmp_url[l-1]=0;
-            if(strcmp(tmp_url,"q")==0) return 0;
+            if(strcmp(tmp_url,"quit")==0) return 0;
             if(strlen(tmp_url)==0) safe_strncpy(tmp_url,"http://localhost",sizeof(tmp_url));
                 break;
         }
     }
 
-    /* Ensure scheme */
-    if(strncmp(tmp_url,"http://",7)!=0 && strncmp(tmp_url,"https://",8)!=0){
-        char fixed[256]={0};
-        snprintf(fixed,sizeof(fixed),"http://%s",tmp_url);
-        safe_strncpy(tmp_url,fixed,sizeof(tmp_url));
-    }
-
-    /* Port input */
+    /* Step 2: Port */
     char portbuf[16]={0};
-    printf("Port (default 8080): ");
+    printf("+------------------------------------------+\n");
+    printf("| Step 2/6: Enter port                       |\n");
+    printf("| Default: 8080                              |\n");
+    printf("| Type 'quit' then ENTER to cancel           |\n");
+    printf("+------------------------------------------+\n");
+    printf("Port: ");
     fflush(stdout);
+
     if(fgets(portbuf,sizeof(portbuf),stdin)){
         size_t l=strlen(portbuf);
         if(l && portbuf[l-1]=='\n') portbuf[l-1]=0;
-        if(strcmp(portbuf,"q")==0) return 0;
-        if(strlen(portbuf)==0) strcat(tmp_url,":8080");
-        else { strcat(tmp_url,":"); strcat(tmp_url,portbuf); }
+        if(strcmp(portbuf,"quit")==0) return 0;
+        if(strlen(portbuf)==0)
+            strcat(tmp_url,":8080");
+        else{
+            strcat(tmp_url,":");
+            strcat(tmp_url,portbuf);
+        }
     }
 
-    /* Username input */
-    printf("User (default admin): ");
+    /* Step 3: Username */
+    printf("+------------------------------------------+\n");
+    printf("| Step 3/6: Enter username                   |\n");
+    printf("| Default: admin                             |\n");
+    printf("| Type 'quit' then ENTER to cancel           |\n");
+    printf("+------------------------------------------+\n");
+    printf("Username: ");
     fflush(stdout);
+
     if(fgets(tmp_user,sizeof(tmp_user),stdin)){
         size_t l=strlen(tmp_user);
         if(l && tmp_user[l-1]=='\n') tmp_user[l-1]=0;
-        if(strcmp(tmp_user,"q")==0) return 0;
-        if(strlen(tmp_user)==0) safe_strncpy(tmp_user,"admin",sizeof(tmp_user));
+        if(strcmp(tmp_user,"quit")==0) return 0;
+        if(strlen(tmp_user)==0)
+            safe_strncpy(tmp_user,"admin",sizeof(tmp_user));
     }
 
-    /* Password input (cannot be blank) */
+    /* Step 4: Password */
     struct termios oldt,newt;
     tcgetattr(STDIN_FILENO,&oldt);
     newt=oldt;
     newt.c_lflag&=~ECHO;
     tcsetattr(STDIN_FILENO,TCSANOW,&newt);
 
-    printf("Enter password (cannot be blank): ");
+    printf("+------------------------------------------+\n");
+    printf("| Step 4/6: Enter password                   |\n");
+    printf("| Empty password will skip saving            |\n");
+    printf("| Type 'quit' then ENTER to cancel           |\n");
+    printf("+------------------------------------------+\n");
+    printf("Password: ");
     fflush(stdout);
+
     if(fgets(tmp_pass,sizeof(tmp_pass),stdin)){
         size_t l=strlen(tmp_pass);
         if(l && tmp_pass[l-1]=='\n') tmp_pass[l-1]=0;
-        if(strcmp(tmp_pass,"q")==0 || strlen(tmp_pass)==0){
+        if(strcmp(tmp_pass,"quit")==0){
             tcsetattr(STDIN_FILENO,TCSANOW,&oldt);
-            printf("\n[No password entered, exiting without saving]\n");
-            printf("+------------------------------------------+\n");
-            exit(1);
+            printf("\n");
+            return 0;
         }
-    } else {
-        tcsetattr(STDIN_FILENO,TCSANOW,&oldt);
-        printf("\n[No password entered, exiting without saving]\n");
-        printf("+------------------------------------------+\n");
-        exit(1);
-    }
+    } else tmp_pass[0]=0;
 
     tcsetattr(STDIN_FILENO,TCSANOW,&oldt);
     printf("\n");
 
-    /* Copy values to creds */
+    /* Step 5: Save file path */
+    char dir[512]={0};
+    char save_path[512]={0};
+
+    snprintf(dir,sizeof(dir),"%s%s",home,DEFAULT_AUTH_DIR);
+    mkdir(dir,0700);  // ignore if exists
+    snprintf(save_path,sizeof(save_path),"%s/%s",dir,DEFAULT_AUTH_FILE);
+
+    printf("+------------------------------------------+\n");
+    printf("| Step 5/6: Enter full save path for file   |\n");
+    printf("| Default: %s\n", save_path);
+    printf("| Press ENTER to accept default path        |\n");
+    printf("| Type 'quit' then ENTER to cancel          |\n");
+    printf("+------------------------------------------+\n");
+    printf("Save path: ");
+    fflush(stdout);
+
+    char input_path[512]={0};
+    if(fgets(input_path,sizeof(input_path),stdin)){
+        size_t l=strlen(input_path);
+        if(l && input_path[l-1]=='\n') input_path[l-1]=0;
+        if(strcmp(input_path,"quit")==0) return 0;
+        if(strlen(input_path)>0)
+            safe_strncpy(save_path,input_path,sizeof(save_path));
+    }
+
+    /* Step 6: Show creds and save */
     safe_strncpy(creds.qbt_url,tmp_url,sizeof(creds.qbt_url));
     safe_strncpy(creds.qbt_user,tmp_user,sizeof(creds.qbt_user));
     safe_strncpy(creds.qbt_pass,tmp_pass,sizeof(creds.qbt_pass));
 
-    /* Save to ~/.qbtctl/auth.txt */
-    char dir[512]={0};
-    snprintf(dir,sizeof(dir),"%s%s",home,DEFAULT_AUTH_DIR);
-    mkdir(dir,0700);  // ignore if exists
+    printf("+------------------------------------------+\n");
+    printf("| Step 6/6: Credentials to be saved         |\n");
+    printf("+------------------------------------------+\n");
+    printf("URL:      [%s]\n", creds.qbt_url);
+    printf("User:     [%s]\n", creds.qbt_user);
+    printf("Password: [******]\n");
+    printf("Saving to: %s\n", save_path);
+    printf("+------------------------------------------+\n");
 
-    char save_path[512]={0};
-    snprintf(save_path,sizeof(save_path),"%s/%s",dir,DEFAULT_AUTH_FILE);
-
-    if(!save_auth_file(save_path)){
-        ERR("Failed to save auth file");
-
-        printf("+------------------------------------------+\n");
+    if(strlen(creds.qbt_pass)==0){
+        printf("[Empty password, not saving auth file]\n");
         return 0;
     }
 
-    printf("[Saved to: %s]\n", save_path);
+    if(!save_auth_file(save_path)){
+        ERR("Failed to save auth file");
+        return 0;
+    }
 
-    printf("+------------------------------------------+\n");
     return 1;
 }
-
 /* ----------------- INIT AUTH ----------------- */
 bool init_auth(int argc, char **argv)
 {
