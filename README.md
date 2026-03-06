@@ -110,6 +110,179 @@ You may override credentials when running commands:
 ```
 
 ---
+# 💡 Usage Examples
+
+These examples assume you have already set up credentials with `./qbtctl --setup`.
+
+---
+
+## 1. Show all torrents
+
+```bash
+./qbtctl -a
+```
+
+**Example output:**
+
+```text
+
++------------------------------------------+--------+--------------+--------------+--------------+--------------+--------------+----------+------------------+
+| Name                                     | Hash   | UL Limit(Kb) | DL Limit(Kb) | State        | Seed Time    | Limit D:H:M  | Category | Tags             |
++------------------------------------------+--------+--------------+--------------+--------------+--------------+--------------+----------+------------------+
+| Ubuntu.ISO                               | 9c3289 | 0            | 0            | stalledUP    | 01:01:01     | 04:04:04     | ISO      | ISO, Debian      |
+
+```
+
+With raw output (bytes, seconds, true/false):
+
+```bash
+./qbtctl -r -a
+```
+
+```text
++------------------------------------------+--------+--------------+--------------+--------------+--------------+--------------+----------+------------------+
+| Name                                     | Hash   | UL Limit (b) | DL Limit (b) | State        | Seed Time    | Limit(secs)  | Category | Tags             |
++------------------------------------------+--------+--------------+--------------+--------------+--------------+--------------+----------+------------------+
+| Ubuntu.ISO                               | 9c3289 | 0            | 0            | stalledUP    | 90104        | 360240       | ISO      | ISO, Debian      |
+
+```
+
+---
+
+## 2. Show single torrent info (with or without raw)
+
+```bash
+./qbtctl -s -h 9c3289
+```
+
+**Example output:**
+
+```text
++------------------------------------------+
+Name: Ubuntu.ISO
+Hash: 9c3289027f9760e0f3fcfd2df40e0d80b2350191
+Tags: ISO, Debian
+Category: ISO
+Upload Limit: 0
+Download Limit: 0
+Full Path: /incoming/Ubuntu.iso
+Ratio Limit: 99.99
+Seedtime: 01:01:01
+Seedtime Limit: 04:04:04
+Sequential Download: 0
+Auto TMM: 0
+Superseed: 0
+Tracker: http://tracker.foo.com
+Private: 0
+State: stalledUP
++------------------------------------------+
+
+```
+
+With raw JSON:
+
+```bash
+./qbtctl -sj -h 9c3289
+```
+
+```json
+{"name":"Ubuntu.ISO","state":"ForcedUP","dl_limit":1048576,"ul_limit":524288,"ratio":2.0,"seed_time":45296,....etc}
+```
+
+---
+
+## 3. Modify torrent settings
+
+Set category and tags:
+
+```bash
+./qbtctl -sc Linux -st Linux,ISO -h 9c3289
+```
+
+Set upload and download limits:
+
+```bash
+./qbtctl -sul 1024 -sdl 2048 -h 9c3289
+```
+
+Enable sequential download and superseed:
+
+```bash
+./qbtctl -ssd 1 -sss 1 -h 9c3289
+```
+
+---
+
+## 4. Pause, resume, or remove torrents
+
+Pause a torrent:
+
+```bash
+./qbtctl -ap -h 9c3289
+```
+
+Resume a torrent:
+
+```bash
+./qbtctl -as -h 9c3289
+```
+
+Remove torrent (keep data):
+
+```bash
+./qbtctl -ar -h 9c3289
+```
+
+Delete torrent and data:
+
+```bash
+./qbtctl -ad -h 9c3289
+```
+
+---
+
+## 5. Move torrent data
+
+```bash
+./qbtctl -am /downloads/linux -h 9c3289
+```
+
+Moves the files to `/downloads/linux` on the server.
+
+---
+
+## 6. Quick non-interactive run
+
+If you want to run commands directly with credentials:
+
+```bash
+./qbtctl --url http://localhost:8080 --user admin --pass mypass -a
+```
+
+---
+
+## 7. Docker One-Liner (Static Build & Run)
+
+```bash
+docker run --rm -v $(pwd):/out alpine:latest /bin/sh -c "
+apk add --no-cache build-base musl-dev zlib-static pkgconf wget tar libsodium-dev libsodium-static &&
+cd /tmp &&
+wget https://curl.se/download/curl-8.17.0.tar.gz &&
+tar xzf curl-8.17.0.tar.gz &&
+cd curl-8.17.0 &&
+./configure --disable-shared --enable-static --without-ssl --disable-ntlm --disable-ldap --disable-ldaps \
+            --disable-ftp --disable-file --disable-dict --disable-telnet --disable-pop3 --disable-imap \
+            --disable-smtp --disable-gopher --disable-manual --disable-psl --without-libpsl &&
+make -j$(nproc) &&
+cd /out &&
+gcc -O2 -static -s \
+-I/tmp/curl-8.17.0/include \
+-L/tmp/curl-8.17.0/lib/.libs \
+-o qbtctl *.c \
+-lcurl -lsodium -lz -lm -ldl -lpthread &&
+./qbtctl --setup
+"
+```
 
 # Options
 
