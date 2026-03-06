@@ -363,6 +363,31 @@ gcc -O2 -static -s \
 -sat <val>, --set-autotmm <val>       0 (OFF)         false
 -sss <val>, --set-superseed <val>     0 (OFF)         false
 ```
+## ⚠ Exit / Error Codes
+
+```bash
+# Exit Codes for qbtctl
+0  EXIT_OK           # Success
+1  EXIT_AUTH_FAIL    # Authentication failed
+2  EXIT_BAD_ARGS     # Invalid command-line arguments
+3  EXIT_NETWORK      # Network or connection error
+4  EXIT_API_FAIL     # API request failed
+5  EXIT_FILE_ERROR   # File read/write failed
+```
+Usage Example:
+```
+./qbtctl -a
+if [ $? -ne 0 ]; then
+    echo "[ERROR] qbtctl encountered an error!"
+fi
+```
+Notes:
+
+These codes are returned by the CLI when commands fail.
+
+Useful for scripting and automated workflows.
+
+Always check $? immediately after a command for accurate results.
 
 ---
 
@@ -400,3 +425,5 @@ If you enjoy **qbtctl**, consider buying me a coffee
 # Notes
 - Not tested with SSL (https://), I added some code but needs testing.
 - Special thank you to the cJSON drop in from https://github.com/DaveGamble/cJSON
+
+---
