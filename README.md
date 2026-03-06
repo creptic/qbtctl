@@ -1,8 +1,6 @@
 # qbtctl
 [![Release](https://img.shields.io/github/v/release/creptic/qbtctl)](https://github.com/creptic/qbtctl/releases)
-[![Downloads](https://img.shields.io/github/downloads/creptic/qbtctl/total)](https://github.com/creptic/qbtctl/releases)
-[![Donate](https://img.shields.io/badge/☕-Buy%20Me%20A%20Coffee-orange)](https://www.paypal.com/paypalme/crepticdev)
-
+[![Donate](https://img.shields.io/badge/Donate-PayPal-blue.svg)](https://www.paypal.com/paypalme/crepticdev)
 ---
 
 **qbtctl** is a minimal, ultra-fast command-line interface for controlling qBittorrent via its Web API.
@@ -394,9 +392,7 @@ gcc -O2 -static -s \
 # ☕ Support / Donate 
 If you enjoy **qbtctl**, consider buying me a coffee
 
-Donate via **PayPal**: 
-
-[![Donate](https://img.shields.io/badge/☕-Buy%20Me%20A%20Coffee-orange)](https://www.paypal.com/paypalme/crepticdev) 
+[![Donate](https://img.shields.io/badge/Donate-PayPal-blue.svg)](https://www.paypal.com/paypalme/crepticdev)
 
 ---
 # Notes
