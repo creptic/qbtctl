@@ -20,6 +20,19 @@
 #define ERR(fmt, ...) fprintf(stderr,"[ERROR] " fmt "\n",##__VA_ARGS__)
 #endif
 
+/* ================= EXIT CODES ================= */
+#ifndef AUTH_EXIT_CODES
+#define AUTH_EXIT_CODES
+
+#define EXIT_OK             0
+#define EXIT_LOGIN_FAIL     1
+#define EXIT_FETCH_FAIL     2
+#define EXIT_SET_FAIL       3
+#define EXIT_BAD_ARGS       4
+
+#endif /* AUTH_EXIT_CODES */
+
+
 struct qbt_creds creds = {0};
 
 /* SAFE STRING COPY */
@@ -58,7 +71,9 @@ static void hex_to_bytes(const char *hex, unsigned char *out, size_t out_size)
 /* SAVE AUTH FILE */
 static int save_auth_file(const char *path)
 {
-    if(!path || sodium_init()<0){ ERR("libsodium init failed"); return 0; }
+    if(!path || sodium_init()<0){ ERR("libsodium init failed"); exit(EXIT_FETCH_FAIL);
+
+    }
 
     unsigned char key[crypto_secretbox_KEYBYTES]={0};
     memcpy(key,"qbtkeyqbtkeyqbtkeyqbtkeyqbtkey12",crypto_secretbox_KEYBYTES);
@@ -80,7 +95,7 @@ static int save_auth_file(const char *path)
 
     /* Save file */
     FILE *f=fopen(path,"w");
-    if(!f){ ERR("Cannot write auth file: %s", path); return 0; }
+    if(!f){ ERR("Cannot write auth file: %s", path); exit (EXIT_SET_FAIL); }
     fprintf(f,"url=%s\nuser=%s\npassword=%s\n",creds.qbt_url,creds.qbt_user,hex_cipher);
     fclose(f);
     chmod(path,0600);
@@ -91,10 +106,11 @@ static int save_auth_file(const char *path)
 /* LOAD AUTH FILE */
 static int load_auth_file(const char *path)
 {
-    if(sodium_init()<0){ ERR("libsodium init failed"); return 0; }
+    if(sodium_init()<0){ ERR("libsodium init failed"); exit (EXIT_SET_FAIL);
+    }
 
     FILE *f=fopen(path,"r");
-    if(!f) return 0;
+    if(!f) return EXIT_FETCH_FAIL;
 
     char line[256];
     while(fgets(line,sizeof(line),f)){
@@ -119,6 +135,8 @@ static int load_auth_file(const char *path)
                 if(crypto_secretbox_open_easy(plain,cipher,cipher_len,nonce,key)!=0){
                     ERR("Failed to decrypt password in %s", path);
                     creds.qbt_pass[0]=0;
+                    fclose(f);
+                    return EXIT_FETCH_FAIL;
                 } else safe_strncpy(creds.qbt_pass,(char*)plain,sizeof(creds.qbt_pass));
             } else creds.qbt_pass[0]=0;
         }
@@ -159,9 +177,9 @@ static int interactive_setup()
 
     /* Step 1: URL */
     printf("+------------------------------------------+\n");
-    printf("| Step 1/6: Enter qBittorrent URL            |\n");
-    printf("| Default: http://localhost                  |\n");
-    printf("| Type 'quit' then ENTER to cancel           |\n");
+    printf("| Step 1/6: Enter qBittorrent URL          |\n");
+    printf("| Default: http://localhost                |\n");
+    printf("| Type 'quit' then ENTER to cancel         |\n");
     printf("+------------------------------------------+\n");
     printf("URL: ");
     fflush(stdout);
@@ -179,9 +197,9 @@ static int interactive_setup()
     /* Step 2: Port */
     char portbuf[16]={0};
     printf("+------------------------------------------+\n");
-    printf("| Step 2/6: Enter port                       |\n");
-    printf("| Default: 8080                              |\n");
-    printf("| Type 'quit' then ENTER to cancel           |\n");
+    printf("| Step 2/6: Enter port                     |\n");
+    printf("| Default: 8080                            |\n");
+    printf("| Type 'quit' then ENTER to cancel         |\n");
     printf("+------------------------------------------+\n");
     printf("Port: ");
     fflush(stdout);
@@ -200,9 +218,9 @@ static int interactive_setup()
 
     /* Step 3: Username */
     printf("+------------------------------------------+\n");
-    printf("| Step 3/6: Enter username                   |\n");
-    printf("| Default: admin                             |\n");
-    printf("| Type 'quit' then ENTER to cancel           |\n");
+    printf("| Step 3/6: Enter username                 |\n");
+    printf("| Default: admin                           |\n");
+    printf("| Type 'quit' then ENTER to cancel         |\n");
     printf("+------------------------------------------+\n");
     printf("Username: ");
     fflush(stdout);
@@ -223,9 +241,9 @@ static int interactive_setup()
     tcsetattr(STDIN_FILENO,TCSANOW,&newt);
 
     printf("+------------------------------------------+\n");
-    printf("| Step 4/6: Enter password                   |\n");
-    printf("| Empty password will skip saving            |\n");
-    printf("| Type 'quit' then ENTER to cancel           |\n");
+    printf("| Step 4/6: Enter password                 |\n");
+    printf("| Empty password will skip saving          |\n");
+    printf("| Type 'quit' then ENTER to cancel         |\n");
     printf("+------------------------------------------+\n");
     printf("Password: ");
     fflush(stdout);
@@ -236,7 +254,7 @@ static int interactive_setup()
         if(strcmp(tmp_pass,"quit")==0){
             tcsetattr(STDIN_FILENO,TCSANOW,&oldt);
             printf("\n");
-            return 0;
+            exit(EXIT_BAD_ARGS);
         }
     } else tmp_pass[0]=0;
 
@@ -249,7 +267,7 @@ static int interactive_setup()
 
     if(strlen(creds.qbt_pass)==0){
         printf("[Empty password, not saving auth file]\n");
-        return 0;
+        return EXIT_BAD_ARGS;
     }
 
     /* Step 5: Save file path */
@@ -280,7 +298,7 @@ static int interactive_setup()
 
     /* Step 6: Show creds and save */
     printf("+------------------------------------------+\n");
-    printf("| Step 6/6: Credentials to be saved         |\n");
+    printf("| Step 6/6: Credentials to be saved        |\n");
     printf("+------------------------------------------+\n");
     printf("URL:      [%s]\n", creds.qbt_url);
     printf("User:     [%s]\n", creds.qbt_user);
@@ -291,7 +309,7 @@ static int interactive_setup()
 
     if(!save_auth_file(save_path)){
         ERR("Failed to save auth file");
-        return 0;
+        return EXIT_SET_FAIL;
     }
 
     return 1;
@@ -307,7 +325,7 @@ bool init_auth(int argc, char **argv)
     for(int i=1;i<argc;i++){
         if(strcmp(argv[i],"-i")==0 || strcmp(argv[i],"--setup")==0){
             interactive_setup();
-            exit(0);
+            exit(EXIT_OK);
         } else if(strcmp(argv[i],"--user")==0 && i+1<argc){
             safe_strncpy(cli_user,argv[i+1],sizeof(cli_user));
             i++;
@@ -320,7 +338,7 @@ bool init_auth(int argc, char **argv)
         } else if(strcmp(argv[i],"-c")==0){
             if(i+1>=argc){
                 ERR("Option -c requires a file path argument");
-                exit(1);
+                exit(EXIT_BAD_ARGS);
             }
             config_path=argv[i+1];
             i++;
@@ -332,7 +350,7 @@ bool init_auth(int argc, char **argv)
         if(load_auth_file(config_path)) loaded=1;
         else{
             ERR("Failed to load config from -c path: %s", config_path);
-            exit(1);
+            exit(EXIT_FETCH_FAIL);
         }
     }
 
@@ -359,7 +377,7 @@ bool init_auth(int argc, char **argv)
     /* 5. Final check: must have non-empty password */
     if(!can_attempt_login()){
         printf("[No credentials supplied, exiting without attempting login]\n");
-        exit(1);
+        exit(EXIT_LOGIN_FAIL);
     }
     return true;
 }
