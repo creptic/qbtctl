@@ -159,10 +159,9 @@ static int interactive_setup()
 
     /* Step 1: URL */
     printf("+------------------------------------------+\n");
-    printf("| Step 1/6: Enter qBittorrent URL          |\n");
-    printf("| Include http:// or https://               |\n");
-    printf("| Default: http://localhost                 |\n");
-    printf("| Type 'quit' then ENTER to cancel          |\n");
+    printf("| Step 1/6: Enter qBittorrent URL            |\n");
+    printf("| Default: http://localhost                  |\n");
+    printf("| Type 'quit' then ENTER to cancel           |\n");
     printf("+------------------------------------------+\n");
     printf("URL: ");
     fflush(stdout);
@@ -244,6 +243,15 @@ static int interactive_setup()
     tcsetattr(STDIN_FILENO,TCSANOW,&oldt);
     printf("\n");
 
+    safe_strncpy(creds.qbt_url,tmp_url,sizeof(creds.qbt_url));
+    safe_strncpy(creds.qbt_user,tmp_user,sizeof(creds.qbt_user));
+    safe_strncpy(creds.qbt_pass,tmp_pass,sizeof(creds.qbt_pass));
+
+    if(strlen(creds.qbt_pass)==0){
+        printf("[Empty password, not saving auth file]\n");
+        return 0;
+    }
+
     /* Step 5: Save file path */
     char dir[512]={0};
     char save_path[512]={0};
@@ -253,10 +261,10 @@ static int interactive_setup()
     snprintf(save_path,sizeof(save_path),"%s/%s",dir,DEFAULT_AUTH_FILE);
 
     printf("+------------------------------------------+\n");
-    printf("| Step 5/6: Enter full save path for file   |\n");
+    printf("| Step 5/6: Enter full save path for file   \n");
     printf("| Default: %s\n", save_path);
-    printf("| Press ENTER to accept default path        |\n");
-    printf("| Type 'quit' then ENTER to cancel          |\n");
+    printf("| Press ENTER to accept default path        \n");
+    printf("| Type 'quit' then ENTER to cancel          \n");
     printf("+------------------------------------------+\n");
     printf("Save path: ");
     fflush(stdout);
@@ -271,10 +279,6 @@ static int interactive_setup()
     }
 
     /* Step 6: Show creds and save */
-    safe_strncpy(creds.qbt_url,tmp_url,sizeof(creds.qbt_url));
-    safe_strncpy(creds.qbt_user,tmp_user,sizeof(creds.qbt_user));
-    safe_strncpy(creds.qbt_pass,tmp_pass,sizeof(creds.qbt_pass));
-
     printf("+------------------------------------------+\n");
     printf("| Step 6/6: Credentials to be saved         |\n");
     printf("+------------------------------------------+\n");
@@ -284,10 +288,6 @@ static int interactive_setup()
     printf("Saving to: %s\n", save_path);
     printf("+------------------------------------------+\n");
 
-    if(strlen(creds.qbt_pass)==0){
-        printf("[Empty password, not saving auth file]\n");
-        return 0;
-    }
 
     if(!save_auth_file(save_path)){
         ERR("Failed to save auth file");
