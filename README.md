@@ -372,6 +372,7 @@ gcc -O2 -static -s \
 2  EXIT_FETCH_FAIL    # API fetch request failed
 3  EXIT_SET_FAIL      # API set request failed
 4  EXIT_BAD_ARGS      # Invalid command-line arguments
+5  EXIT_FILE          # Invalid file operation
 ``` 
 Usage Example:
 ```
