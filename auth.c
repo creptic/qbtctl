@@ -28,6 +28,7 @@
 #define EXIT_SET_FAIL       3
 #define EXIT_BAD_ARGS       4
 #define EXIT_FILE           5
+#define EXIT_ACTION_FAIL    6 /* Not used here future maybe */
 
 
 struct qbt_creds creds = {0};

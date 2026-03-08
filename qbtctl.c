@@ -26,6 +26,8 @@ void show_help(void);
 #define EXIT_SET_FAIL       3
 #define EXIT_BAD_ARGS       4
 #define EXIT_FILE           5
+#define EXIT_ACTION_FAIL    6
+
 
 #define ERR(fmt, ...) fprintf(stderr, "[ERROR] " fmt "\n", ##__VA_ARGS__)
 
@@ -224,7 +226,7 @@ int resolve_short_hash(CURL *curl)
     {
         if (root) cJSON_Delete(root);
         ERR("resolve_short_hash: invalid JSON response");
-        return EXIT_LOGIN_FAIL;
+        return 0;
     }
 
     int matches = 0;
@@ -254,13 +256,13 @@ int resolve_short_hash(CURL *curl)
     if (matches == 0)
     {
         ERR("No torrent matches short hash: %s", creds.qbt_hash);
-        return EXIT_BAD_ARGS;
+        return 0;
     }
 
     if (matches > 1)
     {
         ERR("Short hash is ambiguous: %s", creds.qbt_hash);
-        return EXIT_BAD_ARGS;
+        return 0;
     }
 
     safe_copy(creds.qbt_hash, sizeof(creds.qbt_hash), resolved_hash);
@@ -396,7 +398,7 @@ static int ensure_single_loaded(CURL *curl, int *single_loaded)
     if (!*single_loaded) {
         if (!populate_torrent_info_struct(curl)) {
             ERR("Failed to populate torrent info in ensure_single_loaded");
-            return 0;
+            exit (EXIT_FETCH_FAIL);
         }
         *single_loaded = 1;
     }
@@ -541,18 +543,18 @@ int get_tracker_list(CURL *curl)
 {
     if (!curl) {
         ERR("CURL handle is NULL");
-        return -1;
+        exit(EXIT_FETCH_FAIL);
     }
 
     if (!creds.qbt_hash[0]) {
         ERR("No torrent hash loaded");
-        return -1;
+        exit(EXIT_BAD_ARGS);
     }
 
     char *escaped_hash = curl_easy_escape(curl, creds.qbt_hash, 0);
     if (!escaped_hash) {
         ERR("Failed to escape hash");
-        return -1;
+        exit(EXIT_BAD_ARGS);
     }
 
     char url[512];
@@ -565,13 +567,13 @@ int get_tracker_list(CURL *curl)
 
     if (written < 0 || written >= (int)sizeof(url)) {
         ERR("URL buffer overflow");
-        return -1;
+        exit(EXIT_FETCH_FAIL);
     }
 
     char *json = qbt_get_json(curl, url);
     if (!json) {
         ERR("Failed to fetch tracker list");
-        return -1;
+        exit(EXIT_FETCH_FAIL);
     }
 
     cJSON *root = cJSON_Parse(json);
@@ -580,7 +582,7 @@ int get_tracker_list(CURL *curl)
     if (!root || !cJSON_IsArray(root)) {
         if (root) cJSON_Delete(root);
         ERR("Invalid JSON from tracker endpoint");
-        return -1;
+        exit(EXIT_FETCH_FAIL);
     }
 
     /* Used only when raw_mode == 0 */
@@ -687,16 +689,18 @@ int get_tracker_list(CURL *curl)
 }
 
 /* ================= SHOW ALL TORRENTS INFO AS JSON ================= */
-void show_all_torrents_info_json(CURL *curl)
+int show_all_torrents_info_json(CURL *curl)
 {
     char url[512];
     snprintf(url, sizeof(url), "%s/api/v2/torrents/info", creds.qbt_url);
 
     char *json = qbt_get_json(curl, url);
-    if (!json) return;
+    if (!json) return EXIT_FETCH_FAIL;
 
     printf("%s\n", json);
     free(json);
+
+    return EXIT_OK;
 }
 
 /* ================= SHOW SINGLE TORRENT INFO ================= */
@@ -723,13 +727,13 @@ void show_single_torrent_info()
 }
 
 /* ================= SHOW ALL TORRENTS INFO ================= */
-void show_all_torrents_info(CURL *curl)
+int show_all_torrents_info(CURL *curl)
 {
     char url[512];
     snprintf(url, sizeof(url), "%s/api/v2/torrents/info", creds.qbt_url);
 
     char *json = qbt_get_json(curl, url);
-    if (!json) return;
+    if (!json) return EXIT_FETCH_FAIL;
 
     cJSON *root = cJSON_Parse(json);
     free(json);
@@ -737,7 +741,7 @@ void show_all_torrents_info(CURL *curl)
     {
         if (root) cJSON_Delete(root);
         ERR("show_all_torrents_info: invalid JSON response");
-        return;
+        return EXIT_FETCH_FAIL;
     }
 
     int count = cJSON_GetArraySize(root);
@@ -869,6 +873,7 @@ void show_all_torrents_info(CURL *curl)
     }
 
     cJSON_Delete(root);
+    return EXIT_OK;
 }
 
 /* !================ SETTERS ================! */
@@ -1515,17 +1520,17 @@ int set_seqdl(CURL *curl, const char *val)
 }
 /* !================ ACTIONS ================! */
 /*action helper*/
-static bool qbt_action(CURL *curl, const char *endpoint, const char *post)
+static int qbt_action(CURL *curl, const char *endpoint, const char *post)
 {
     if (!curl || !creds.qbt_hash[0]) {
         ERR("qbt_action: invalid arguments");
-        return false;
+        return EXIT_BAD_ARGS;
     }
 
     char *esc = curl_easy_escape(curl, creds.qbt_hash, 0);
     if (!esc) {
         ERR("qbt_action: hash escape failed");
-        return false;
+        return EXIT_BAD_ARGS;
     }
 
     char postdata[512];
@@ -1534,13 +1539,13 @@ static bool qbt_action(CURL *curl, const char *endpoint, const char *post)
         if (snprintf(postdata, sizeof(postdata),
             "hashes=%s&%s", esc, post) >= (int)sizeof(postdata)) {
             curl_free(esc);
-        return false;
+        return EXIT_ACTION_FAIL;
             }
     } else {
         if (snprintf(postdata, sizeof(postdata),
             "hashes=%s", esc) >= (int)sizeof(postdata)) {
             curl_free(esc);
-        return false;
+        return EXIT_ACTION_FAIL;
             }
     }
 
@@ -1548,56 +1553,63 @@ static bool qbt_action(CURL *curl, const char *endpoint, const char *post)
 
     if (!qbt_request(curl, endpoint, postdata, NULL)) {
         ERR("qbt_action: request failed for %s", endpoint);
-        return false;
+        return EXIT_ACTION_FAIL;
     }
 
-    return true;
+    return EXIT_OK;
 }
-bool pause_torrent(CURL *curl)
+int pause_torrent(CURL *curl)
 {
-    return qbt_action(curl, "/api/v2/torrents/stop", NULL);
+    int rc = qbt_action(curl, "/api/v2/torrents/stop", NULL);
+    return rc;
 }
 
-bool start_torrent(CURL *curl)
+int start_torrent(CURL *curl)
 {
-    return qbt_action(curl, "/api/v2/torrents/start", NULL);
+    int rc = qbt_action(curl, "/api/v2/torrents/start", NULL);
+    return rc;
 }
-bool force_start_torrent(CURL *curl)
+int force_start_torrent(CURL *curl)
 {
-    return qbt_action(curl, "/api/v2/torrents/setForceStart", "value=true");
+   int rc = qbt_action(curl, "/api/v2/torrents/setForceStart", "value=true");
+   return rc;
 }
-bool move_torrent(CURL *curl, const char *path)
+int move_torrent(CURL *curl, const char *path)
 {
     if (!curl || !path || !path[0]) {
         ERR("move_torrent: invalid path");
-        return false;
+        return EXIT_BAD_ARGS;
     }
 
     char *esc = curl_easy_escape(curl, path, 0);
     if (!esc) {
         ERR("move_torrent: path escape failed");
-        return false;
+        return EXIT_ACTION_FAIL;
     }
 
     char post[256];
     if (snprintf(post, sizeof(post), "location=%s", esc) >= (int)sizeof(post)) {
         curl_free(esc);
-        return false;
+        return EXIT_ACTION_FAIL;
     }
 
     curl_free(esc);
-    return qbt_action(curl, "/api/v2/torrents/setLocation", post);
+    int rc = qbt_action(curl, "/api/v2/torrents/setLocation", post);
+    return rc;
 }
 
-bool stop_and_remove_torrent(CURL *curl, bool delete_files)
+int stop_and_remove_torrent(CURL *curl, bool delete_files)
 {
     if (!pause_torrent(curl))
-        return false;
+        return EXIT_ACTION_FAIL; /* Try to stop torrent first */
 
-    if (delete_files)
-        return qbt_action(curl, "/api/v2/torrents/delete", "deleteFiles=true");
-
-    return qbt_action(curl, "/api/v2/torrents/delete", "deleteFiles=false");
+    int rc={0};
+    if (delete_files) {
+        rc = qbt_action(curl, "/api/v2/torrents/delete", "deleteFiles=true");
+        return rc;
+    }
+    rc = qbt_action(curl, "/api/v2/torrents/delete", "deleteFiles=false");
+    return rc;
 }
 
 /* ================= OPTIONAL HTTPS (todo)SUPPORT ================= */
@@ -1620,6 +1632,16 @@ bool stop_and_remove_torrent(CURL *curl, bool delete_files)
 
 int main(int argc, char **argv)
 {
+
+    if (argc == 1) {
+        printf("No command specified. Use qbtctl --help\n");
+        exit(EXIT_BAD_ARGS);
+    }
+
+    if (strcmp(argv[1], "--help") == 0){
+        show_help();
+        exit(EXIT_OK);
+    }
 
     /* =========== CHECK AUTH / SET CREDS ============== */
     int rc = init_auth(argc, argv);
@@ -1725,19 +1747,36 @@ int main(int argc, char **argv)
         const char *arg = argv[i];
 
         if ((strcmp(arg, "-a") == 0 || strcmp(arg, "--show-all") == 0)) {
-            show_all_torrents_info(curl);
+            rc = show_all_torrents_info(curl);
+            if (rc != EXIT_OK) {
+                curl_easy_cleanup(curl);
+                curl_global_cleanup();
+                return rc;
+            }
             did_action = true;
         } else if ((strcmp(arg, "-ac") == 0 || strcmp(arg, "--show-all-clean") == 0)) {
             show_all_clean = 1;
-            show_all_torrents_info(curl);
+            rc = show_all_torrents_info(curl);
+            if (rc != EXIT_OK) {
+                curl_easy_cleanup(curl);
+                curl_global_cleanup();
+                return rc;
+            }
             show_all_clean = 0;
             did_action = true;
         } else if ((strcmp(arg, "-aj") == 0 || strcmp(arg, "--show-all-json") == 0)) {
-            show_all_torrents_info_json(curl);
+            rc = show_all_torrents_info_json(curl);
+            if (rc != EXIT_OK) {
+                curl_easy_cleanup(curl);
+                curl_global_cleanup();
+                return rc;
+            }
             did_action = true;
         } else if ((strcmp(arg, "-s") == 0 || strcmp(arg, "--show-single") == 0)) {
-            if (!ensure_single_loaded(curl, &single_loaded)) continue;
-            show_single_torrent_info();
+            if (!ensure_single_loaded(curl, &single_loaded)) {
+               show_single_torrent_info();
+               continue;
+            }
             did_action = true;
         } else if ((strcmp(arg, "-sj") == 0 || strcmp(arg, "--show-single-json") == 0)) {
             show_json = 1;
@@ -1869,45 +1908,51 @@ int main(int argc, char **argv)
             }
             did_action = true;
         } else if ((strcmp(arg, "-as") == 0 || strcmp(arg, "--start") == 0)) {
-            if (!start_torrent(curl)) {
+            rc = start_torrent(curl);
+            if (rc != EXIT_OK) {
                 curl_easy_cleanup(curl);
                 curl_global_cleanup();
-                return EXIT_SET_FAIL;
+                return rc;
             }
             did_action = true;
         } else if ((strcmp(arg, "-ap") == 0 || strcmp(arg, "--pause") == 0)) {
-            if (!pause_torrent(curl)) {
+            rc = pause_torrent(curl);
+            if (rc != EXIT_OK) {
                 curl_easy_cleanup(curl);
                 curl_global_cleanup();
-                return EXIT_SET_FAIL;
+                return rc;
             }
             did_action = true;
         } else if ((strcmp(arg, "-af") == 0 || strcmp(arg, "--force-start") == 0)) {
-            if (!force_start_torrent(curl)) {
+            rc = force_start_torrent(curl);
+            if (rc != EXIT_OK) {
                 curl_easy_cleanup(curl);
                 curl_global_cleanup();
-                return EXIT_SET_FAIL;
+                return rc;
             }
             did_action = true;
         } else if ((strcmp(arg, "-am") == 0 || strcmp(arg, "--move") == 0) && i + 1 < argc) {
-            if (!move_torrent(curl, argv[++i])) {
+            rc = move_torrent(curl, argv[++i]);
+            if (rc != EXIT_OK) {
                 curl_easy_cleanup(curl);
                 curl_global_cleanup();
-                return EXIT_SET_FAIL;
+                return rc;
             }
             did_action = true;
         } else if ((strcmp(arg, "-ar") == 0 || strcmp(arg, "--remove") == 0)) {
-            if (!stop_and_remove_torrent(curl, false)) {
+            rc = stop_and_remove_torrent(curl, false);
+            if (rc != EXIT_OK) {
                 curl_easy_cleanup(curl);
                 curl_global_cleanup();
-                return EXIT_SET_FAIL;
+                    return rc;
             }
             did_action = true;
         } else if ((strcmp(arg, "-ad") == 0 || strcmp(arg, "--delete") == 0)) {
-            if (!stop_and_remove_torrent(curl, true)) {
+            rc = stop_and_remove_torrent(curl, true);
+            if (rc != EXIT_OK) {
                 curl_easy_cleanup(curl);
                 curl_global_cleanup();
-                return EXIT_SET_FAIL;
+                return rc;
             }
             did_action = true;
         }
@@ -1922,5 +1967,5 @@ int main(int argc, char **argv)
             return EXIT_BAD_ARGS;
         }
     }
-    return rc;
+    return EXIT_OK;
 }
