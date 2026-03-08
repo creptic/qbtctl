@@ -332,7 +332,7 @@ gcc -O2 -static -s \
 ```bash
 # Command                   Standard Output              --raw Output
 -gn, --get-name             Ubuntu.ISO                   "Ubuntu.ISO"
--gt, --get-tags             Linux,ISO                    ["Linux","ISO"]
+-gt, --get-tags             Linux,ISO                    "Linux","ISO"
 -gc, --get-category         Linux ISOs                   "Linux ISOs"
 -gu, --get-up-limit         512 (KB/s)                   524288
 -gd, --get-dl-limit         1024 (KB/s)                  1048576
@@ -344,7 +344,7 @@ gcc -O2 -static -s \
 -gat, --get-autotmm         0 (OFF)                      false
 -gss, --get-superseed       1 (ON)                       true
 -gtr, --get-tracker         tracker.example.com          "tracker.example.com:port/announce"
--gtl, --get-tracker-list    tracker1,tracker2            ["udp.tracker1:port","tracker2:port"]
+-gtl, --get-tracker-list    tracker1,tracker2            "udp.tracker1:port","tracker2:port"
 -gp, --get-private          1 (YES)                      true
 -gst, --get-status          ForcedUP                     "ForcedUP"
 ```
