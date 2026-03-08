@@ -104,7 +104,7 @@ static size_t discard_cb(void *ptr, size_t size, size_t nmemb, void *userdata)
 /* ================= LOGIN ================= */
 static int login_qbt(CURL *curl)
 {
-    if (!curl) return 0;
+    if (!curl) return EXIT_LOGIN_FAIL;
 
     char url[512];
     char post[256];
@@ -124,14 +124,14 @@ static int login_qbt(CURL *curl)
     CURLcode res = curl_easy_perform(curl);
     if (res != CURLE_OK) {
         ERR("CURL error on login: %s", curl_easy_strerror(res));
-        return 0;
+        return EXIT_FETCH_FAIL;
     }
 
     long status = 0;
     curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &status);
     if (status != 200) {
         ERR("Login failed, HTTP status: %ld", status);
-        return 0;
+        return EXIT_LOGIN_FAIL;
     }
 
     curl_easy_setopt(curl, CURLOPT_POST, 0L);
@@ -1498,21 +1498,16 @@ bool stop_and_remove_torrent(CURL *curl, bool delete_files)
          curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 5L);
      }
  }
-/* ================= MAIN ================= */
 
+/* ================= MAIN ================= */
 int main(int argc, char **argv)
 {
 
-    /* ================= DEFAULT (NO ARGS) ================= */
-    if (argc == 1) {
-        printf ("Use qbtctl --help for usage\n");
-        return EXIT_BAD_ARGS;
-    }
-
     /* =========== CHECK AUTH / SET CREDS ============== */
-    if(!init_auth(argc, argv)) {
+    int rc = init_auth(argc, argv);
+    if(rc != EXIT_OK) {
         ERR("Authentication initialization failed.");
-        return EXIT_LOGIN_FAIL;;
+        exit(rc);
     }
 
     bool did_action = false;
@@ -1576,7 +1571,10 @@ int main(int argc, char **argv)
     curl_global_init(CURL_GLOBAL_DEFAULT);
     CURL *curl = curl_easy_init();
 
-    if (!curl) return EXIT_LOGIN_FAIL;
+    if (!curl) {
+        ERR("Failed to initialize CURL");
+        return EXIT_LOGIN_FAIL;
+    }
 
     /* Enable HTTPS automatically if URL starts with https:// */
     configure_https_if_needed(curl);
@@ -1584,12 +1582,13 @@ int main(int argc, char **argv)
     curl_easy_setopt(curl, CURLOPT_COOKIEFILE, "");
     curl_easy_setopt(curl, CURLOPT_COOKIEJAR, "");
 
-    if (!login_qbt(curl)) {
+    rc = login_qbt(curl);
+    if(rc != EXIT_OK) {
         curl_easy_cleanup(curl);
         curl_global_cleanup();
-        return EXIT_LOGIN_FAIL;
+        return rc;
     }
- /* =============== RESOLVE AND VALIDATE SHORT HASH ============= */
+    /* =============== RESOLVE AND VALIDATE SHORT HASH ============= */
     if (need_single_hash) {
         if (strlen(creds.qbt_hash) == 0) {
             fprintf(stderr, "Hash required for this operation\n");
@@ -1792,6 +1791,9 @@ int main(int argc, char **argv)
     curl_easy_cleanup(curl);
     curl_global_cleanup();
 
-    if (!did_action) return EXIT_BAD_ARGS;
-    return EXIT_OK;
+    if (!did_action) {
+        printf("No command specified. Use qbtctl --help\n");
+        return EXIT_BAD_ARGS;
+    }
+    return rc;
 }
