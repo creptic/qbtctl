@@ -192,11 +192,11 @@ State: stalledUP
 With raw JSON:
 
 ```bash
-./qbtctl -sj -h 9c3289
+./qbtctl -sj -h 1562EG
 ```
 
 ```json
-{"name":"Ubuntu.ISO","state":"stalledUP","dl_limit":1048576,"ul_limit":524288,"ratio":2.0,"seed_time":45296,....etc}
+{"name":"ARCH.ISO","state":"stalledUP","dl_limit":1048576,"ul_limit":524288,"ratio":2.0,"seed_time":45296,....etc}
 ```
 
 ---
