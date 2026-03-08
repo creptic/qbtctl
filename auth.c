@@ -32,7 +32,6 @@
 
 #endif /* AUTH_EXIT_CODES */
 
-
 struct qbt_creds creds = {0};
 
 /* SAFE STRING COPY */
@@ -71,9 +70,7 @@ static void hex_to_bytes(const char *hex, unsigned char *out, size_t out_size)
 /* SAVE AUTH FILE */
 static int save_auth_file(const char *path)
 {
-    if(!path || sodium_init()<0){ ERR("libsodium init failed"); exit(EXIT_FETCH_FAIL);
-
-    }
+    if(!path || sodium_init()<0){ ERR("libsodium init failed"); return EXIT_FETCH_FAIL; }
 
     unsigned char key[crypto_secretbox_KEYBYTES]={0};
     memcpy(key,"qbtkeyqbtkeyqbtkeyqbtkeyqbtkey12",crypto_secretbox_KEYBYTES);
@@ -95,19 +92,18 @@ static int save_auth_file(const char *path)
 
     /* Save file */
     FILE *f=fopen(path,"w");
-    if(!f){ ERR("Cannot write auth file: %s", path); exit (EXIT_SET_FAIL); }
+    if(!f){ ERR("Cannot write auth file: %s", path); return EXIT_SET_FAIL; }
     fprintf(f,"url=%s\nuser=%s\npassword=%s\n",creds.qbt_url,creds.qbt_user,hex_cipher);
     fclose(f);
     chmod(path,0600);
 
-    return 1;
+    return EXIT_OK;
 }
 
 /* LOAD AUTH FILE */
 static int load_auth_file(const char *path)
 {
-    if(sodium_init()<0){ ERR("libsodium init failed"); exit (EXIT_SET_FAIL);
-    }
+    if(sodium_init()<0){ ERR("libsodium init failed"); return EXIT_FETCH_FAIL; }
 
     FILE *f=fopen(path,"r");
     if(!f) return EXIT_FETCH_FAIL;
@@ -143,14 +139,14 @@ static int load_auth_file(const char *path)
         else if(strncmp(line,"url=",4)==0) safe_strncpy(creds.qbt_url,line+4,sizeof(creds.qbt_url));
     }
     fclose(f);
-    return 1;
+    return EXIT_OK;
 }
 
 /* Dummy write callback that discards data */
 static size_t discard_write(void *ptr, size_t size, size_t nmemb, void *userdata) {
     (void)ptr;
     (void)userdata;
-    return size*nmemb;  // tell curl we handled all bytes
+    return size*nmemb;
 }
 
 /* Helper: check if login is actually possible */
@@ -188,7 +184,7 @@ static int interactive_setup()
         if(fgets(tmp_url,sizeof(tmp_url),stdin)){
             size_t l=strlen(tmp_url);
             if(l && tmp_url[l-1]=='\n') tmp_url[l-1]=0;
-            if(strcmp(tmp_url,"quit")==0) return 0;
+            if(strcmp(tmp_url,"quit")==0) return EXIT_BAD_ARGS;
             if(strlen(tmp_url)==0) safe_strncpy(tmp_url,"http://localhost",sizeof(tmp_url));
                 break;
         }
@@ -207,7 +203,7 @@ static int interactive_setup()
     if(fgets(portbuf,sizeof(portbuf),stdin)){
         size_t l=strlen(portbuf);
         if(l && portbuf[l-1]=='\n') portbuf[l-1]=0;
-        if(strcmp(portbuf,"quit")==0) return 0;
+        if(strcmp(portbuf,"quit")==0) return EXIT_BAD_ARGS;
         if(strlen(portbuf)==0)
             strcat(tmp_url,":8080");
         else{
@@ -228,7 +224,7 @@ static int interactive_setup()
     if(fgets(tmp_user,sizeof(tmp_user),stdin)){
         size_t l=strlen(tmp_user);
         if(l && tmp_user[l-1]=='\n') tmp_user[l-1]=0;
-        if(strcmp(tmp_user,"quit")==0) return 0;
+        if(strcmp(tmp_user,"quit")==0) return EXIT_BAD_ARGS;
         if(strlen(tmp_user)==0)
             safe_strncpy(tmp_user,"admin",sizeof(tmp_user));
     }
@@ -254,7 +250,7 @@ static int interactive_setup()
         if(strcmp(tmp_pass,"quit")==0){
             tcsetattr(STDIN_FILENO,TCSANOW,&oldt);
             printf("\n");
-            exit(EXIT_BAD_ARGS);
+            return EXIT_BAD_ARGS;
         }
     } else tmp_pass[0]=0;
 
@@ -291,7 +287,7 @@ static int interactive_setup()
     if(fgets(input_path,sizeof(input_path),stdin)){
         size_t l=strlen(input_path);
         if(l && input_path[l-1]=='\n') input_path[l-1]=0;
-        if(strcmp(input_path,"quit")==0) return 0;
+        if(strcmp(input_path,"quit")==0) return EXIT_BAD_ARGS;
         if(strlen(input_path)>0)
             safe_strncpy(save_path,input_path,sizeof(save_path));
     }
@@ -306,16 +302,11 @@ static int interactive_setup()
     printf("Saving to: %s\n", save_path);
     printf("+------------------------------------------+\n");
 
-
-    if(!save_auth_file(save_path)){
-        ERR("Failed to save auth file");
-        return EXIT_SET_FAIL;
-    }
-
-    return 1;
+    return save_auth_file(save_path);
 }
+
 /* ----------------- INIT AUTH ----------------- */
-bool init_auth(int argc, char **argv)
+int init_auth(int argc, char **argv)
 {
     char cli_user[64]={0}, cli_pass[64]={0}, cli_url[256]={0};
     char *config_path=NULL;
@@ -324,8 +315,7 @@ bool init_auth(int argc, char **argv)
     /* parse CLI args */
     for(int i=1;i<argc;i++){
         if(strcmp(argv[i],"-i")==0 || strcmp(argv[i],"--setup")==0){
-            interactive_setup();
-            exit(EXIT_OK);
+            return interactive_setup();
         } else if(strcmp(argv[i],"--user")==0 && i+1<argc){
             safe_strncpy(cli_user,argv[i+1],sizeof(cli_user));
             i++;
@@ -338,7 +328,7 @@ bool init_auth(int argc, char **argv)
         } else if(strcmp(argv[i],"-c")==0){
             if(i+1>=argc){
                 ERR("Option -c requires a file path argument");
-                exit(EXIT_BAD_ARGS);
+                return EXIT_BAD_ARGS;
             }
             config_path=argv[i+1];
             i++;
@@ -347,15 +337,15 @@ bool init_auth(int argc, char **argv)
 
     /* 1. -c has highest priority */
     if(config_path){
-        if(load_auth_file(config_path)) loaded=1;
+        if(load_auth_file(config_path)==EXIT_OK) loaded=1;
         else{
             ERR("Failed to load config from -c path: %s", config_path);
-            exit(EXIT_FETCH_FAIL);
+            return EXIT_FETCH_FAIL;
         }
     }
 
     /* 2. auth.txt in current directory */
-    if(!loaded && load_auth_file(DEFAULT_AUTH_FILE)) loaded=1;
+    if(!loaded && load_auth_file(DEFAULT_AUTH_FILE)==EXIT_OK) loaded=1;
 
     /* 3. ~/.qbtctl/auth.txt */
     if(!loaded){
@@ -366,7 +356,7 @@ bool init_auth(int argc, char **argv)
         }
         char home_path[512]={0};
         snprintf(home_path,sizeof(home_path),"%s%s/%s",home,DEFAULT_AUTH_DIR,DEFAULT_AUTH_FILE);
-        if(load_auth_file(home_path)) loaded=1;
+        if(load_auth_file(home_path)==EXIT_OK) loaded=1;
     }
 
     /* 4. CLI args override everything */
@@ -377,7 +367,7 @@ bool init_auth(int argc, char **argv)
     /* 5. Final check: must have non-empty password */
     if(!can_attempt_login()){
         printf("[No credentials supplied, exiting without attempting login]\n");
-        exit(EXIT_LOGIN_FAIL);
+        return EXIT_LOGIN_FAIL;
     }
-    return true;
+    return EXIT_OK;
 }

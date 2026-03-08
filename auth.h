@@ -26,6 +26,6 @@ extern struct qbt_creds creds;
    - Run interactive setup if requested
    - Apply CLI overrides
 */
-bool init_auth(int argc, char **argv);
+int init_auth(int argc, char **argv);
 
 #endif /* AUTH_H */
