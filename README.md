@@ -332,7 +332,7 @@ gcc -O2 -static -s \
 ```bash
 # Command                   Standard Output              --raw Output
 -gn, --get-name             Ubuntu.ISO                   "Ubuntu.ISO"
--gt, --get-tags             Linux,ISO                    "Linux","ISO"
+-gt, --get-tags             Linux,ISO                    "Linux, ISO"
 -gc, --get-category         Linux ISOs                   "Linux ISOs"
 -gu, --get-up-limit         512 (KB/s)                   524288
 -gd, --get-dl-limit         1024 (KB/s)                  1048576
