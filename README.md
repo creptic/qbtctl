@@ -83,7 +83,7 @@ Auth file search order:
 
 1. `~/.qbtctl/auth.txt`
 2. `./auth.txt` (inside the qbtctl directory)
-3. Custom path using `-c <path>`
+3. Custom path using `-c <path>` (overrride)
 ---
 
 # Interactive Setup
