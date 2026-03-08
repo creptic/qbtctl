@@ -25,6 +25,7 @@ void show_help(void);
 #define EXIT_FETCH_FAIL     2
 #define EXIT_SET_FAIL       3
 #define EXIT_BAD_ARGS       4
+#define EXIT_FILE           5
 
 #define ERR(fmt, ...) fprintf(stderr, "[ERROR] " fmt "\n", ##__VA_ARGS__)
 
@@ -124,7 +125,7 @@ static int login_qbt(CURL *curl)
     CURLcode res = curl_easy_perform(curl);
     if (res != CURLE_OK) {
         ERR("CURL error on login: %s", curl_easy_strerror(res));
-        return EXIT_FETCH_FAIL;
+        return EXIT_LOGIN_FAIL;
     }
 
     long status = 0;
@@ -137,7 +138,7 @@ static int login_qbt(CURL *curl)
     curl_easy_setopt(curl, CURLOPT_POST, 0L);
     curl_easy_setopt(curl, CURLOPT_HTTPGET, 1L);
 
-    return 1;
+    return EXIT_OK;
 }
 /* ================= GET JSON ================= */
 char *qbt_get_json(CURL *curl, const char *url)
@@ -223,7 +224,7 @@ int resolve_short_hash(CURL *curl)
     {
         if (root) cJSON_Delete(root);
         ERR("resolve_short_hash: invalid JSON response");
-        return 0;
+        return EXIT_LOGIN_FAIL;
     }
 
     int matches = 0;
@@ -253,13 +254,13 @@ int resolve_short_hash(CURL *curl)
     if (matches == 0)
     {
         ERR("No torrent matches short hash: %s", creds.qbt_hash);
-        return 0;
+        return EXIT_BAD_ARGS;
     }
 
     if (matches > 1)
     {
         ERR("Short hash is ambiguous: %s", creds.qbt_hash);
-        return 0;
+        return EXIT_BAD_ARGS;
     }
 
     safe_copy(creds.qbt_hash, sizeof(creds.qbt_hash), resolved_hash);
@@ -268,18 +269,19 @@ int resolve_short_hash(CURL *curl)
 
 static bool resolve_and_validate_hash(CURL *curl, const char *hash)
 {
+
     if (!curl || !hash) return false;
 
     safe_copy(creds.qbt_hash, sizeof(creds.qbt_hash), hash);
 
     if (!resolve_short_hash(curl)) {
         ERR("Failed to resolve short hash '%s'", hash);
-        return false;
+        exit(EXIT_BAD_ARGS);
     }
 
     if (!validate_hash(creds.qbt_hash)) {
         ERR("Resolved hash is invalid: '%s'", creds.qbt_hash);
-        return false;
+        exit(EXIT_BAD_ARGS);
     }
 
     return true;
@@ -436,8 +438,8 @@ char *get_tracker(void)
 {
     static char formatted[512];
 
-    if (!torrent.tracker[0])  // check for empty string, not NULL
-        return NULL;
+    if (!torrent.tracker[0])
+        return "";
 
     if (raw==1)
         return torrent.tracker;
@@ -656,7 +658,7 @@ int get_tracker_list(CURL *curl)
         if (seen_count >= 128)
             continue;
 
-        strcpy(seen_hosts[seen_count], host);
+        safe_copy(seen_hosts[seen_count], sizeof(seen_hosts[seen_count]), host);
         seen_count++;
 
         /* Build scheme://host */
@@ -986,8 +988,8 @@ static bool parse_limit(const char *input, long long *out_value)
     return true;
 }
 
-/* Helper for boolean setters (raw/non-raw) */
-static int int_validate_set_value(const char *value_str)
+/* Helper for setters (raw/non-raw) */
+int int_validate_set_value(const char *value_str)
 {
     if (!value_str) return -1;
 
@@ -1011,83 +1013,112 @@ static int int_validate_set_value(const char *value_str)
 }
 
 /* ================= SET UPLOAD LIMIT ================= */
-bool set_up_limit(CURL *curl, const char *limit_str)
+int set_up_limit(CURL *curl, const char *limit_str)
 {
     if (!curl) {
         ERR("CURL handle is NULL");
-        return false;
+        return EXIT_SET_FAIL;
     }
 
     long long parsed_val = -1;
     if (!parse_limit(limit_str, &parsed_val)) {
         ERR("Invalid upload limit: %s", limit_str);
-        return false;
+        return EXIT_BAD_ARGS;
     }
 
     long limit = (parsed_val >= 0 && !raw) ? (long)parsed_val * 1024 : (long)parsed_val;
 
     char *escaped = curl_easy_escape(curl, creds.qbt_hash, 0);
-    if (!escaped) { ERR("Failed to escape hash"); return false; }
+    if (!escaped) {
+        ERR("Failed to escape hash");
+        return EXIT_FETCH_FAIL;
+    }
 
     char postdata[128];
-    if (snprintf(postdata, sizeof(postdata), "hashes=%s&limit=%ld", escaped, limit) >= (int)sizeof(postdata)) {
-        ERR("POST buffer overflow"); curl_free(escaped); return false;
-    }
+    if (snprintf(postdata, sizeof(postdata),
+        "hashes=%s&limit=%ld", escaped, limit) >= (int)sizeof(postdata)) {
+        curl_free(escaped);
+        return EXIT_SET_FAIL;
+        }
 
-    curl_free(escaped);
+        curl_free(escaped);
 
-    if (!qbt_request(curl, "/api/v2/torrents/setUploadLimit", postdata, NULL)) {
-        ERR("Failed to set upload limit to %ld", limit);
-        return false;
-    }
+        if (!qbt_request(curl, "/api/v2/torrents/setUploadLimit", postdata, NULL)) {
+            ERR("Failed to set upload limit");
+            return EXIT_SET_FAIL;
+        }
 
-    return true;
+        return EXIT_OK;
 }
 
 /* ================= SET DOWNLOAD LIMIT ================= */
-bool set_dl_limit(CURL *curl, const char *limit_str)
+int set_dl_limit(CURL *curl, const char *limit_str)
 {
-    if (!curl) { ERR("CURL handle is NULL"); return false; }
+    if (!curl) { ERR("CURL handle is NULL");
+        return EXIT_SET_FAIL;
+    }
 
     long long parsed_val = -1;
-    if (!parse_limit(limit_str, &parsed_val)) { ERR("Invalid download limit: %s", limit_str); return false; }
+    if (!parse_limit(limit_str, &parsed_val)) {
+        ERR("Invalid download limit: %s", limit_str);
+        return EXIT_BAD_ARGS;
+    }
 
     long limit = (parsed_val >= 0 && !raw) ? (long)parsed_val * 1024 : (long)parsed_val;
 
     char *escaped = curl_easy_escape(curl, creds.qbt_hash, 0);
-    if (!escaped) { ERR("Failed to escape hash"); return false; }
+    if (!escaped) {
+        ERR("Failed to escape hash");
+        return EXIT_SET_FAIL;
+    }
 
     char postdata[128];
-    if (snprintf(postdata, sizeof(postdata), "hashes=%s&limit=%ld", escaped, limit) >= (int)sizeof(postdata)) {
-        ERR("POST buffer overflow"); curl_free(escaped); return false;
+    if (snprintf(postdata, sizeof(postdata),
+        "hashes=%s&limit=%ld", escaped, limit) >= (int)sizeof(postdata)) {
+        ERR("POST buffer overflow");
+        curl_free(escaped);
+        return EXIT_SET_FAIL;
     }
 
     curl_free(escaped);
 
     if (!qbt_request(curl, "/api/v2/torrents/setDownloadLimit", postdata, NULL)) {
         ERR("Failed to set download limit to %ld", limit);
-        return false;
+        return EXIT_SET_FAIL;
     }
 
-    return true;
+    return EXIT_OK;
 }
 
 /* ================= SET SEEDTIME LIMIT ================= */
-bool set_seedtime_limit(CURL *curl, const char *seedtime_str)
+int set_seedtime_limit(CURL *curl, const char *seedtime_str)
 {
-    if (!curl || !seedtime_str) { ERR("Invalid arguments"); return false; }
-    if (!creds.qbt_hash[0]) { ERR("No torrent hash selected"); return false; }
+    if (!curl || !seedtime_str) {
+        ERR("Invalid arguments");
+        return EXIT_BAD_ARGS;
+    }
+    if (!creds.qbt_hash[0]) {
+        ERR("No torrent hash selected");
+        return EXIT_BAD_ARGS;
+    }
 
     int single_loaded = 0;
-    if (!ensure_single_loaded(curl, &single_loaded)) { ERR("Failed to load torrent info"); return false; }
+    if (!ensure_single_loaded(curl, &single_loaded)) {
+        ERR("Failed to load torrent info");
+        return EXIT_FETCH_FAIL;
+    }
 
     long seedtime_seconds = 0;
     if (!raw) {
         int dd = 0, hh = 0, mm = 0;
         if (sscanf(seedtime_str, "%d:%d:%d", &dd, &hh, &mm) != 3) {
-            ERR("Invalid DD:HH:MM format '%s'", seedtime_str); return false;
+            ERR("Invalid DD:HH:MM format '%s'", seedtime_str);
+            return EXIT_BAD_ARGS;
         }
-        if (dd < 0 || hh < 0 || mm < 0) { ERR("Negative values not allowed"); return false; }
+        if (dd < 0 || hh < 0 || mm < 0) {
+            ERR("Negative values not allowed");
+            return EXIT_BAD_ARGS;
+        }
         seedtime_seconds = dd*86400L + hh*3600L + mm*60L;
     } else {
         for (size_t i = 0; seedtime_str[i]; i++)
@@ -1095,7 +1126,7 @@ bool set_seedtime_limit(CURL *curl, const char *seedtime_str)
             if (!isdigit((unsigned char)seedtime_str[i]))
             {
                 ERR("Invalid numeric seedtime '%s'", seedtime_str);
-                return false;
+                return EXIT_BAD_ARGS;
             }
         }
 
@@ -1103,75 +1134,95 @@ bool set_seedtime_limit(CURL *curl, const char *seedtime_str)
     }
 
     char *escaped = curl_easy_escape(curl, creds.qbt_hash, 0);
-    if (!escaped) { ERR("Failed to escape hash"); return false; }
+    if (!escaped) {
+        ERR("Failed to escape hash");
+        return EXIT_SET_FAIL;
+    }
 
     char postdata[512];
     if (snprintf(postdata, sizeof(postdata),
         "hashes=%s&ratioLimit=%.5f&seedingTimeLimit=%ld&inactiveSeedingTimeLimit=-1",
         escaped, torrent.ratio_limit, seedtime_seconds) >= (int)sizeof(postdata)) {
-        ERR("POST buffer overflow"); curl_free(escaped); return false;
+        ERR("POST buffer overflow");
+        curl_free(escaped);
+        return EXIT_SET_FAIL;
         }
 
         curl_free(escaped);
 
     if (!qbt_request(curl, "/api/v2/torrents/setShareLimits", postdata, NULL)) {
-        ERR("Failed to set seedtime limit"); return false;
+        ERR("Failed to set seedtime limit");
+        return EXIT_FETCH_FAIL;
     }
 
-    return true;
+    return EXIT_OK;
 }
 
 /* ================= SET RATIO LIMIT ================= */
-bool set_ratio_limit(CURL *curl, const char *ratio_str)
+int set_ratio_limit(CURL *curl, const char *ratio_str)
 {
-    if (!curl || !ratio_str || !creds.qbt_hash[0]) { ERR("Invalid arguments"); return false; }
+    if (!curl || !ratio_str || !creds.qbt_hash[0]) {
+        ERR("Invalid arguments");
+        return EXIT_BAD_ARGS;
+    }
 
     int single_loaded = 0;
-    if (!ensure_single_loaded(curl, &single_loaded)) { ERR("Failed to load torrent info"); return false; }
+    if (!ensure_single_loaded(curl, &single_loaded)) {
+        ERR("Failed to load torrent info");
+        return EXIT_FETCH_FAIL;
+    }
 
     char *endptr = NULL;
     double ratio = strtod(ratio_str, &endptr);
-    if (endptr == ratio_str || *endptr != '\0' || ratio < 0.0) { ERR("Invalid ratio value: %s", ratio_str); return false; }
+    if (endptr == ratio_str || *endptr != '\0' || ratio < 0.0) {
+        ERR("Invalid ratio value: %s", ratio_str);
+        return EXIT_BAD_ARGS;
+    }
 
     char ratio_buf[32];
     snprintf(ratio_buf, sizeof(ratio_buf), "%.5f", ratio);
 
     char *escaped = curl_easy_escape(curl, creds.qbt_hash, 0);
-    if (!escaped) { ERR("Failed to escape hash"); return false; }
+    if (!escaped) {
+        ERR("Failed to escape hash");
+        return EXIT_SET_FAIL;
+    }
 
     char postdata[512];
     if (snprintf(postdata, sizeof(postdata),
         "hashes=%s&ratioLimit=%s&seedingTimeLimit=%d&inactiveSeedingTimeLimit=-1",
         escaped, ratio_buf, torrent.seedtime_limit) >= (int)sizeof(postdata)) {
-        ERR("POST buffer overflow"); curl_free(escaped); return false;
-        }
-
+        ERR("POST buffer overflow");
+        curl_free(escaped);
+        return EXIT_SET_FAIL;
+    }
         curl_free(escaped);
 
     if (!qbt_request(curl, "/api/v2/torrents/setShareLimits", postdata, NULL)) {
-        ERR("Failed to set ratio limit"); return false;
+        ERR("Failed to set ratio limit");
+        return EXIT_SET_FAIL;
     }
 
-    return true;
+    return EXIT_OK;
 }
 
 /* ================= SET CATEGORY ================= */
-bool set_category(CURL *curl, const char *category)
+int set_category(CURL *curl, const char *category)
 {
     if (!curl) {
         ERR("CURL handle is NULL");
-        return false;
+        return EXIT_BAD_ARGS;
     }
 
     if (!creds.qbt_hash[0]) {
         ERR("No torrent hash selected");
-        return false;
+        return EXIT_BAD_ARGS;
     }
 
     char *escaped_hash = curl_easy_escape(curl, creds.qbt_hash, 0);
     if (!escaped_hash) {
         ERR("Failed to escape hash");
-        return false;
+        return EXIT_SET_FAIL;
     }
 
     /* ---------- CLEAR CATEGORY ---------- */
@@ -1181,21 +1232,21 @@ bool set_category(CURL *curl, const char *category)
         if (snprintf(postdata, sizeof(postdata),
             "hashes=%s&category=", escaped_hash) >= (int)sizeof(postdata)) {
             ERR("POST buffer overflow");
-        curl_free(escaped_hash);
-        return false;
-            }
-
             curl_free(escaped_hash);
+            return EXIT_SET_FAIL;
+        }
 
-            if (!qbt_request(curl,
-                "/api/v2/torrents/setCategory",
-                postdata,
-                NULL)) {
-                ERR("Failed to clear category");
-            return false;
-                }
+        curl_free(escaped_hash);
 
-                return true;
+        if (!qbt_request(curl,
+            "/api/v2/torrents/setCategory",
+            postdata,
+            NULL)) {
+            ERR("Failed to clear category");
+            return EXIT_SET_FAIL;
+        }
+
+        return EXIT_OK;
     }
 
     /* ---------- CHECK IF CATEGORY EXISTS ---------- */
@@ -1205,7 +1256,7 @@ bool set_category(CURL *curl, const char *category)
     if (!mem.data) {
         ERR("Memory allocation failed");
         curl_free(escaped_hash);
-        return false;
+        return EXIT_SET_FAIL;
     }
 
     mem.size = 0;
@@ -1216,70 +1267,70 @@ bool set_category(CURL *curl, const char *category)
         NULL,
         &mem)) {
         ERR("Failed to fetch categories");
-    free(mem.data);
-    curl_free(escaped_hash);
-    return false;
-        }
-
-        bool exists = false;
-
-        cJSON *root = cJSON_Parse(mem.data);
         free(mem.data);
+        curl_free(escaped_hash);
+        return EXIT_FETCH_FAIL;
+    }
 
-        if (root && cJSON_IsObject(root)) {
-            for (cJSON *child = root->child; child; child = child->next) {
-                if (child->string) {
-                    if (strcasecmp(child->string, category) == 0) {
-                        exists = true;
-                        break;
-                    }
+    bool exists = false;
+
+    cJSON *root = cJSON_Parse(mem.data);
+    free(mem.data);
+
+    if (root && cJSON_IsObject(root)) {
+        for (cJSON *child = root->child; child; child = child->next) {
+            if (child->string) {
+                if (strcasecmp(child->string, category) == 0) {
+                    exists = true;
+                    break;
                 }
             }
         }
+    }
 
-        if (root) {
-            cJSON_Delete(root);
+    if (root) {
+        cJSON_Delete(root);
+    }
+
+    /* ---------- CREATE CATEGORY IF MISSING ---------- */
+
+    if (!exists) {
+
+        char *escaped_create = curl_easy_escape(curl, category, 0);
+        if (!escaped_create) {
+            ERR("Failed to escape category for creation");
+            curl_free(escaped_hash);
+            return EXIT_SET_FAIL;
         }
 
-        /* ---------- CREATE CATEGORY IF MISSING ---------- */
-
-        if (!exists) {
-
-            char *escaped_create = curl_easy_escape(curl, category, 0);
-            if (!escaped_create) {
-                ERR("Failed to escape category for creation");
-                curl_free(escaped_hash);
-                return false;
-            }
-
-            char postcreate[256];
-            if (snprintf(postcreate, sizeof(postcreate),
-                "category=%s", escaped_create) >= (int)sizeof(postcreate)) {
-                ERR("POST buffer overflow for category creation");
+        char postcreate[256];
+        if (snprintf(postcreate, sizeof(postcreate),
+            "category=%s", escaped_create) >= (int)sizeof(postcreate)) {
+            ERR("POST buffer overflow for category creation");
             curl_free(escaped_create);
             curl_free(escaped_hash);
-            return false;
-                }
-
-                curl_free(escaped_create);
-
-                if (!qbt_request(curl,
-                    "/api/v2/torrents/createCategory",
-                    postcreate,
-                    NULL)) {
-                    ERR("Failed to create category '%s'", category);
-                curl_free(escaped_hash);
-                return false;
-                    }
+            return EXIT_SET_FAIL;
         }
 
-        /* ---------- SET CATEGORY ---------- */
+        curl_free(escaped_create);
 
-        char *escaped_category = curl_easy_escape(curl, category, 0);
+        if (!qbt_request(curl,
+            "/api/v2/torrents/createCategory",
+            postcreate,
+            NULL)) {
+            ERR("Failed to create category '%s'", category);
+            curl_free(escaped_hash);
+            return EXIT_SET_FAIL;
+        }
+    }
+
+    /* ---------- SET CATEGORY ---------- */
+
+    char *escaped_category = curl_easy_escape(curl, category, 0);
         if (!escaped_category) {
             ERR("Failed to escape category");
             curl_free(escaped_hash);
-            return false;
+            return EXIT_SET_FAIL;
         }
 
         char postdata[512];
@@ -1288,113 +1339,180 @@ bool set_category(CURL *curl, const char *category)
             escaped_hash,
             escaped_category) >= (int)sizeof(postdata)) {
             ERR("POST buffer overflow");
-        curl_free(escaped_hash);
-        curl_free(escaped_category);
-        return false;
-            }
-
             curl_free(escaped_hash);
             curl_free(escaped_category);
+            return EXIT_SET_FAIL;
+        }
 
-            if (!qbt_request(curl,
-                "/api/v2/torrents/setCategory",
-                postdata,
-                NULL)) {
-                ERR("Failed to set category '%s'", category);
-            return false;
-                }
+        curl_free(escaped_hash);
+        curl_free(escaped_category);
 
-                return true;
+        if (!qbt_request(curl,
+            "/api/v2/torrents/setCategory",
+            postdata,
+            NULL)) {
+            ERR("Failed to set category '%s'", category);
+            return EXIT_SET_FAIL;
+        }
+  return EXIT_OK;
 }
 
 /* ================= SET TAGS ================= */
-bool set_tags(CURL *curl,const char *tags_str)
+int set_tags(CURL *curl,const char *tags_str)
 {
-    if(!curl) { ERR("CURL handle is NULL"); return false; }
-    if(!tags_str || !tags_str[0]) { ERR("Invalid tags string"); return false; }
-    if(!creds.qbt_hash[0]) { ERR("No torrent hash selected"); return false; }
+    if(!curl) {
+        ERR("CURL handle is NULL");
+        return EXIT_BAD_ARGS;
+    }
+    if(!tags_str || !tags_str[0]) {
+        ERR("Invalid tags string");
+        return EXIT_BAD_ARGS;
+    }
+    if(!creds.qbt_hash[0]) {
+        ERR("No torrent hash selected");
+        return EXIT_BAD_ARGS;
+    }
 
-    char *escaped_hash=curl_easy_escape(curl,creds.qbt_hash,0); if(!escaped_hash) return false;
-    char *escaped_tags=curl_easy_escape(curl,tags_str,0); if(!escaped_tags){curl_free(escaped_hash); return false;}
+    char *escaped_hash=curl_easy_escape(curl,creds.qbt_hash,0);
+    if(!escaped_hash) {
+        ERR("Failed to escape hash");
+        return EXIT_SET_FAIL;
+    }
+    char *escaped_tags=curl_easy_escape(curl,tags_str,0);
+    if(!escaped_tags){
+        curl_free(escaped_hash);
+        ERR("Failed to escape tags");
+        return EXIT_SET_FAIL;
+    }
 
     char postdata[1024];
-    if(snprintf(postdata,sizeof(postdata),"hashes=%s&tags=%s",escaped_hash,escaped_tags)>= (int)sizeof(postdata)) { ERR("POST buffer overflow"); curl_free(escaped_hash); curl_free(escaped_tags); return false; }
+    if(snprintf(postdata,sizeof(postdata),"hashes=%s&tags=%s",escaped_hash,escaped_tags)>= (int)sizeof(postdata)) {
+        ERR("POST buffer overflow"); curl_free(escaped_hash); curl_free(escaped_tags);
+        return EXIT_SET_FAIL;
+    }
 
     curl_free(escaped_hash); curl_free(escaped_tags);
 
-    if(!qbt_request(curl,"/api/v2/torrents/setTags",postdata,NULL)) { ERR("Failed to set tags to '%s'",tags_str); return false; }
+    if(!qbt_request(curl,"/api/v2/torrents/setTags",postdata,NULL)) {
+        ERR("Failed to set tags to '%s'",tags_str);
+        return EXIT_SET_FAIL;
+    }
 
-    return true;
+    return EXIT_OK;
 }
 
 /* ================= SET SUPERSEED ================= */
-bool set_superseed(CURL *curl,const char *val)
+int set_superseed(CURL *curl,const char *val)
 {
-    if(!curl || !val || !creds.qbt_hash[0]) { ERR("Invalid arguments"); return false; }
-    int valid=int_validate_set_value(val); if(valid==-1) return false;
+    if(!curl || !val || !creds.qbt_hash[0]) {
+        ERR("Invalid arguments");
+        return EXIT_BAD_ARGS;
+    }
+    int valid=int_validate_set_value(val);
+    if(valid==-1) return EXIT_BAD_ARGS;
+
     const char *bool_str=(valid==1)?"true":"false";
 
-    char *escaped=curl_easy_escape(curl,creds.qbt_hash,0); if(!escaped){ ERR("Failed to escape hash"); return false; }
+    char *escaped=curl_easy_escape(curl,creds.qbt_hash,0);
+    if(!escaped){
+        ERR("Failed to escape hash");
+        return EXIT_SET_FAIL;
+    }
 
-    char postdata[128]; if(snprintf(postdata,sizeof(postdata),"hashes=%s&value=%s",escaped,bool_str)>= (int)sizeof(postdata)){ ERR("POST buffer overflow"); curl_free(escaped); return false; }
+    char postdata[128]; if(snprintf(postdata,sizeof(postdata),"hashes=%s&value=%s",escaped,bool_str)>= (int)sizeof(postdata)){
+        ERR("POST buffer overflow");
+        curl_free(escaped);
+        return EXIT_SET_FAIL;
+    }
 
     curl_free(escaped);
 
-    if(!qbt_request(curl,"/api/v2/torrents/setSuperSeeding",postdata,NULL)){ ERR("Failed to set superseed"); return false; }
-    return true;
+    if(!qbt_request(curl,"/api/v2/torrents/setSuperSeeding",postdata,NULL)){
+        ERR("Failed to set superseed");
+        return EXIT_SET_FAIL;
+    }
+    return EXIT_OK;
 }
 
 /* ================= SET AUTOTMM ================= */
-bool set_autotmm(CURL *curl,const char *val)
+int set_autotmm(CURL *curl,const char *val)
 {
-    if(!curl || !val || !creds.qbt_hash[0]) { ERR("Invalid arguments"); return false; }
-    int valid=int_validate_set_value(val); if(valid==-1) return false;
+    if(!curl || !val || !creds.qbt_hash[0]) {
+        ERR("Invalid arguments");
+        return EXIT_BAD_ARGS;
+
+    }
+    int valid=int_validate_set_value(val);
+    if(valid==-1) return EXIT_BAD_ARGS;
     const char *bool_str=(valid==1)?"true":"false";
 
-    char *escaped=curl_easy_escape(curl,creds.qbt_hash,0); if(!escaped){ ERR("Failed to escape hash"); return false; }
+    char *escaped=curl_easy_escape(curl,creds.qbt_hash,0); if(!escaped){
+        ERR("Failed to escape hash");
+        return EXIT_SET_FAIL;
+    }
 
-    char postdata[128]; if(snprintf(postdata,sizeof(postdata),"hashes=%s&enable=%s",escaped,bool_str)>= (int)sizeof(postdata)){ ERR("POST buffer overflow"); curl_free(escaped); return false; }
+    char postdata[128]; if(snprintf(postdata,sizeof(postdata),"hashes=%s&enable=%s",escaped,bool_str)>= (int)sizeof(postdata)){
+        ERR("POST buffer overflow");
+        curl_free(escaped);
+        return EXIT_SET_FAIL;
+    }
 
     curl_free(escaped);
 
-    if(!qbt_request(curl,"/api/v2/torrents/setAutoManagement",postdata,NULL)){ ERR("Failed to set autotmm"); return false; }
-    return true;
+    if(!qbt_request(curl,"/api/v2/torrents/setAutoManagement",postdata,NULL)){
+        ERR("Failed to set autotmm");
+        return EXIT_SET_FAIL;
+    }
+
+    return EXIT_OK;
 }
+
 /* ================= SET SEQUENTIAL DOWNLOAD ================= */
-bool set_seqdl(CURL *curl, const char *val)
+int set_seqdl(CURL *curl, const char *val)
 {
-    if (!curl || !val || !creds.qbt_hash[0]) { ERR("Invalid arguments"); return false; }
+    if (!curl || !val || !creds.qbt_hash[0]) {
+        ERR("Invalid arguments");
+        return EXIT_BAD_ARGS;
+    }
 
     int valid = int_validate_set_value(val);
-    if (valid == -1) return false;
+    if (valid == -1) return EXIT_BAD_ARGS;
 
     bool desired = (valid != 0);
-
     // Load current torrent info
-    if (!populate_torrent_info_struct(curl)) { ERR("Failed to load torrent info"); return false; }
-    if (torrent.seq_dl == desired) return true; // already correct
+    if (!populate_torrent_info_struct(curl)) {
+        ERR("Failed to load torrent info");
+        return EXIT_FETCH_FAIL;
+    }
+    if (torrent.seq_dl == desired) return EXIT_OK; // already correct
 
     // Toggle sequential download
     char *escaped = curl_easy_escape(curl, creds.qbt_hash, 0);
-    if (!escaped) { ERR("Failed to escape hash"); return false; }
-
+    if (!escaped) {
+        ERR("Failed to escape hash");
+        return EXIT_SET_FAIL;
+    }
     char postdata[128];
     if (snprintf(postdata, sizeof(postdata), "hashes=%s", escaped) >= (int)sizeof(postdata)) {
-        ERR("POST buffer overflow"); curl_free(escaped); return false;
+        ERR("POST buffer overflow"); curl_free(escaped);
+        return EXIT_SET_FAIL;
     }
     curl_free(escaped);
 
     if (!qbt_request(curl, "/api/v2/torrents/toggleSequentialDownload", postdata, NULL)) {
-        ERR("Failed to toggle sequential download"); return false;
+        ERR("Failed to toggle sequential download");
+        return EXIT_SET_FAIL;
     }
-
     // Reload and confirm change
-    if (!populate_torrent_info_struct(curl)) { ERR("Failed to reload torrent info"); return false; }
-    if (torrent.seq_dl != desired) { ERR("Sequential download toggle failed"); return false; }
-
-    return true;
+    if (!populate_torrent_info_struct(curl)) {
+        ERR("Failed to reload torrent info");
+        return EXIT_FETCH_FAIL; }
+    if (torrent.seq_dl != desired) {
+        ERR("Sequential download toggle failed");
+        return EXIT_SET_FAIL;
+    }
+    return EXIT_OK;
 }
-
 /* !================ ACTIONS ================! */
 /*action helper*/
 static bool qbt_action(CURL *curl, const char *endpoint, const char *post)
@@ -1498,16 +1616,16 @@ bool stop_and_remove_torrent(CURL *curl, bool delete_files)
          curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 5L);
      }
  }
-
 /* ================= MAIN ================= */
+
 int main(int argc, char **argv)
 {
 
     /* =========== CHECK AUTH / SET CREDS ============== */
     int rc = init_auth(argc, argv);
-    if(rc != EXIT_OK) {
-        ERR("Authentication initialization failed.");
-        exit(rc);
+    if (rc != EXIT_OK) {
+        ERR("Authentication initialization failed. ERROR CODE: [%d]",rc);
+        return rc;
     }
 
     bool did_action = false;
@@ -1571,10 +1689,7 @@ int main(int argc, char **argv)
     curl_global_init(CURL_GLOBAL_DEFAULT);
     CURL *curl = curl_easy_init();
 
-    if (!curl) {
-        ERR("Failed to initialize CURL");
-        return EXIT_LOGIN_FAIL;
-    }
+    if (!curl) return EXIT_FETCH_FAIL;
 
     /* Enable HTTPS automatically if URL starts with https:// */
     configure_https_if_needed(curl);
@@ -1583,24 +1698,25 @@ int main(int argc, char **argv)
     curl_easy_setopt(curl, CURLOPT_COOKIEJAR, "");
 
     rc = login_qbt(curl);
-    if(rc != EXIT_OK) {
+    if (rc!= EXIT_OK) {
         curl_easy_cleanup(curl);
         curl_global_cleanup();
         return rc;
     }
-    /* =============== RESOLVE AND VALIDATE SHORT HASH ============= */
+
+ /* =============== RESOLVE AND VALIDATE SHORT HASH ============= */
     if (need_single_hash) {
         if (strlen(creds.qbt_hash) == 0) {
             fprintf(stderr, "Hash required for this operation\n");
             curl_easy_cleanup(curl);
             curl_global_cleanup();
-            return EXIT_BAD_ARGS;
+            exit(EXIT_BAD_ARGS);
         }
         if (!resolve_and_validate_hash(curl, creds.qbt_hash)) {
             fprintf(stderr, "Error: invalid or ambiguous hash '%s'\n", creds.qbt_hash);
             curl_easy_cleanup(curl);
             curl_global_cleanup();
-            return EXIT_FETCH_FAIL;
+            exit(EXIT_FETCH_FAIL);
         }
     }
 
@@ -1681,66 +1797,75 @@ int main(int argc, char **argv)
             printf("%s\n", get_state());
             did_action = true;
         } else if ((strcmp(argv[i], "-sc") == 0 || strcmp(argv[i], "--set-category") == 0) && i + 1 < argc) {
-            if (!set_category(curl, argv[++i])) {
+            rc = set_category(curl, argv[++i]);
+            if (rc != EXIT_OK) {
                 curl_easy_cleanup(curl);
                 curl_global_cleanup();
-                return EXIT_SET_FAIL;
+                return rc;
             }
             did_action = true;
         } else if ((strcmp(arg, "-st") == 0 || strcmp(arg, "--set-tags") == 0) && i + 1 < argc) {
-            if (!set_tags(curl, argv[++i])) {
+            rc = set_tags(curl, argv[++i]);
+            if (rc != EXIT_OK) {
                 curl_easy_cleanup(curl);
                 curl_global_cleanup();
-                return EXIT_SET_FAIL;
+                return rc;
             }
             did_action = true;
         } else if ((strcmp(arg, "-sul") == 0 || strcmp(arg, "--set-up-limit") == 0) && i + 1 < argc) {
-            if (!set_up_limit(curl, argv[++i])) {
+            rc = set_up_limit(curl, argv[++i]);
+            if (rc != EXIT_OK) {
                 curl_easy_cleanup(curl);
                 curl_global_cleanup();
-                return EXIT_SET_FAIL;
+                return rc;
             }
             did_action = true;
         } else if ((strcmp(arg, "-sdl") == 0 || strcmp(arg, "--set-dl-limit") == 0) && i + 1 < argc) {
-            if (!set_dl_limit(curl, argv[++i])) {
+            rc = set_dl_limit(curl, argv[++i]);
+            if (rc != EXIT_OK) {
                 curl_easy_cleanup(curl);
                 curl_global_cleanup();
-                return EXIT_SET_FAIL;
+                return rc;
             }
             did_action = true;
         } else if ((strcmp(arg, "-srl") == 0 || strcmp(arg, "--set-ratio-limit") == 0) && i + 1 < argc) {
-            if (!set_ratio_limit(curl, argv[++i])) {
+            rc = set_ratio_limit(curl, argv[++i]);
+            if (rc != EXIT_OK) {
                 curl_easy_cleanup(curl);
                 curl_global_cleanup();
-                return EXIT_SET_FAIL;
+                return rc;
             }
             did_action = true;
         } else if ((strcmp(arg, "-sst") == 0 || strcmp(arg, "--set-seedtime-limit") == 0) && i + 1 < argc) {
-            if (!set_seedtime_limit(curl, argv[++i])) {
+            rc = set_seedtime_limit(curl, argv[++i]);
+            if (rc != EXIT_OK) {
                 curl_easy_cleanup(curl);
                 curl_global_cleanup();
-                return EXIT_SET_FAIL;
+                return rc;
             }
             did_action = true;
         } else if ((strcmp(arg, "-ssd") == 0 || strcmp(arg, "--set-seqdl") == 0) && i + 1 < argc) {
-            if (!set_seqdl(curl, argv[++i])) {
+            rc = set_seqdl(curl, argv[++i]);
+            if (rc != EXIT_OK) {
                 curl_easy_cleanup(curl);
                 curl_global_cleanup();
-                return EXIT_SET_FAIL;
+                return rc;
             }
             did_action = true;
         } else if ((strcmp(arg, "-sat") == 0 || strcmp(arg, "--set-autotmm") == 0) && i + 1 < argc) {
-            if (!set_autotmm(curl, argv[++i])) {
+            rc = set_autotmm(curl, argv[++i]);
+            if (rc != EXIT_OK) {
                 curl_easy_cleanup(curl);
                 curl_global_cleanup();
-                return EXIT_SET_FAIL;
+                return rc;
             }
             did_action = true;
         } else if ((strcmp(arg, "-sss") == 0 || strcmp(arg, "--set-superseed") == 0) && i + 1 < argc) {
-            if (!set_superseed(curl, argv[++i])) {
+            rc = set_superseed(curl, argv[++i]);
+            if (rc != EXIT_OK) {
                 curl_easy_cleanup(curl);
                 curl_global_cleanup();
-                return EXIT_SET_FAIL;
+                return rc;
             }
             did_action = true;
         } else if ((strcmp(arg, "-as") == 0 || strcmp(arg, "--start") == 0)) {
@@ -1792,8 +1917,10 @@ int main(int argc, char **argv)
     curl_global_cleanup();
 
     if (!did_action) {
-        printf("No command specified. Use qbtctl --help\n");
-        return EXIT_BAD_ARGS;
+        if (!did_action) {
+            printf("No command specified. Use qbtctl --help\n");
+            return EXIT_BAD_ARGS;
+        }
     }
     return rc;
 }
