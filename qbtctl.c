@@ -35,7 +35,7 @@ int show_all_clean = 0;
 int show_json = 0;
 int show_all_json = 0;
 int raw = 0;
-
+bool if_watch = false;
 
 /* ================= GLOBAL TORRENT ================= */
 struct {
@@ -55,6 +55,13 @@ struct {
     char tracker[512];
     bool is_private;
     char state[64];
+    double progress;     // 0.0 - 100.0
+    long long size;      // bytes
+    long long downloaded;// bytes
+    long long uploaded;  // bytes
+    int dlspeed;         // bytes/sec
+    int upspeed;         // bytes/sec
+    long long eta;       // seconds remaining
 } torrent;
 
 /* ================= CURL MEMORY ================= */
@@ -387,6 +394,35 @@ int populate_torrent_info_struct(CURL *curl)
     item = cJSON_GetObjectItem(obj, "state");
     if (cJSON_IsString(item)) safe_copy(torrent.state, sizeof(torrent.state), item->valuestring);
 
+    /* ----- numeric fields ----- */
+    item = cJSON_GetObjectItem(obj, "upspeed");
+    if(item && cJSON_IsNumber(item))
+        torrent.upspeed = (long long)item->valuedouble;
+
+    item = cJSON_GetObjectItem(obj, "dlspeed");
+    if(item && cJSON_IsNumber(item))
+        torrent.dlspeed = (long long)item->valuedouble;
+
+    item = cJSON_GetObjectItem(obj, "uploaded");
+    if(item && cJSON_IsNumber(item))
+        torrent.uploaded = (long long)item->valuedouble;
+
+    item = cJSON_GetObjectItem(obj, "downloaded");
+    if(item && cJSON_IsNumber(item))
+        torrent.downloaded = (long long)item->valuedouble;
+
+    item = cJSON_GetObjectItem(obj, "size");
+    if(item && cJSON_IsNumber(item))
+        torrent.size = (long long)item->valuedouble;
+
+    item = cJSON_GetObjectItem(obj, "eta");
+    if(item && cJSON_IsNumber(item))
+        torrent.eta = (long long)item->valuedouble;
+
+    /* ----- progress ----- */
+    item = cJSON_GetObjectItem(obj, "progress");
+    if(item && cJSON_IsNumber(item))
+        torrent.progress = item->valuedouble;
 
     cJSON_Delete(root);
     return 1;
@@ -535,6 +571,187 @@ char *get_seedtime_limit() {
         int m = (torrent.seedtime_limit % 3600) / 60;
         snprintf(buf, sizeof(buf), "%02d:%02d:%02d", d, h, m);
     }
+    return buf;
+}
+
+static char *get_upspeed(void)
+{
+    static char buf[64];
+
+    if(raw==0)
+    {
+        long long val = torrent.upspeed;
+
+        if(val>=1048576)
+        {
+            double v = (double)val / 1048576.0;
+            if(if_watch)
+                snprintf(buf, sizeof(buf), "%.2fM/s", v);
+            else
+                snprintf(buf, sizeof(buf), "%.2f", v);
+        }
+        else if(val>=1024)
+        {
+            double v = (double)val / 1024.0;
+            if(if_watch)
+                snprintf(buf, sizeof(buf), "%.2fK/s", v);
+            else
+                snprintf(buf, sizeof(buf), "%.2f", v);
+        }
+        else
+        {
+            if(if_watch)
+                snprintf(buf, sizeof(buf), "%lldB/s", val);
+            else
+                snprintf(buf, sizeof(buf), "%lld", val);
+        }
+    }
+    else
+    {
+        snprintf(buf, sizeof(buf), "%lld", (long long)torrent.upspeed);
+    }
+
+    return buf;
+}
+
+static char *get_uploaded(void)
+{
+    static char buf[64];
+
+    if(raw==0)
+    {
+        long long val = torrent.uploaded;
+
+        if(val>=1048576)
+        {
+            double v = (double)val / 1048576.0;
+            if(if_watch)
+                snprintf(buf, sizeof(buf), "%.2fM/s", v);
+            else
+                snprintf(buf, sizeof(buf), "%.2f", v);
+        }
+        else if(val>=1024)
+        {
+            double v = (double)val / 1024.0;
+            if(if_watch)
+                snprintf(buf, sizeof(buf), "%.2fK/s", v);
+            else
+                snprintf(buf, sizeof(buf), "%.2f", v);
+        }
+        else
+        {
+            if(if_watch)
+                snprintf(buf, sizeof(buf), "%lldB/s", val);
+            else
+                snprintf(buf, sizeof(buf), "%lld", val);
+        }
+    }
+    else
+    {
+        snprintf(buf, sizeof(buf), "%lld", torrent.uploaded);
+    }
+
+    return buf;
+}
+
+static char *get_downloaded(void)
+{
+    static char buf[64];
+
+    if(raw==0)
+    {
+        long long val = torrent.downloaded;
+
+        if(val>=1048576)
+        {
+            double v = (double)val / 1048576.0;
+            if(if_watch)
+                snprintf(buf, sizeof(buf), "%.2fM/s", v);
+            else
+                snprintf(buf, sizeof(buf), "%.2f", v);
+        }
+        else if(val>=1024)
+        {
+            double v = (double)val / 1024.0;
+            if(if_watch)
+                snprintf(buf, sizeof(buf), "%.2fK/s", v);
+            else
+                snprintf(buf, sizeof(buf), "%.2f", v);
+        }
+        else
+        {
+            if(if_watch)
+                snprintf(buf, sizeof(buf), "%lldB/s", val);
+            else
+                snprintf(buf, sizeof(buf), "%lld", val);
+        }
+    }
+    else
+    {
+        snprintf(buf, sizeof(buf), "%lld", torrent.downloaded);
+    }
+
+    return buf;
+}
+
+static char *get_size(void)
+{
+    static char buf[64];
+
+    if(raw==0)
+    {
+        long long val = torrent.size;
+
+        if(val>=1048576)
+        {
+            double v = (double)val / 1048576.0;
+            if(if_watch)
+                snprintf(buf, sizeof(buf), "%.2fM", v);
+            else
+                snprintf(buf, sizeof(buf), "%.2f", v);
+        }
+        else if(val>=1024)
+        {
+            double v = (double)val / 1024.0;
+            if(if_watch)
+                snprintf(buf, sizeof(buf), "%.2fK", v);
+            else
+                snprintf(buf, sizeof(buf), "%.2f", v);
+        }
+        else
+        {
+            snprintf(buf, sizeof(buf), "%lld", val);
+        }
+    }
+    else
+    {
+        snprintf(buf, sizeof(buf), "%lld", torrent.size);
+    }
+
+    return buf;
+}
+
+static char *get_eta(void)
+{
+    static char buf[64];
+
+    if(raw==0)
+    {
+        long long seconds = torrent.eta;
+        long long days = seconds / 86400;
+        long long hours = (seconds % 86400) / 3600;
+        long long minutes = (seconds % 3600) / 60;
+
+        if(if_watch)
+            snprintf(buf, sizeof(buf), "%02lldD:%02lldH:%02lldM", days, hours, minutes);
+        else
+            snprintf(buf, sizeof(buf), "%02lld:%02lld:%02lld", days, hours, minutes);
+    }
+    else
+    {
+        snprintf(buf, sizeof(buf), "%lld", torrent.eta);
+    }
+
     return buf;
 }
 
@@ -1772,11 +1989,9 @@ int main(int argc, char **argv)
                 return rc;
             }
             did_action = true;
-        } else if ((strcmp(arg, "-s") == 0 || strcmp(arg, "--show-single") == 0)) {
-            if (!ensure_single_loaded(curl, &single_loaded)) {
+        } else if ((strcmp(arg, "-s") == 0 || strcmp(arg, "--show-single") == 0) && ensure_single_loaded(curl, &single_loaded)) {
                show_single_torrent_info();
                continue;
-            }
             did_action = true;
         } else if ((strcmp(arg, "-sj") == 0 || strcmp(arg, "--show-single-json") == 0)) {
             show_json = 1;
