@@ -467,41 +467,51 @@ int init_auth(int argc, char **argv)
                     ERR("Option -c requires path");
                     exit(EXIT_BAD_ARGS);
                 }
+                const char *path = argv[i + 1];
 
+                /* Make sure the file exists */
+                if(access(path, R_OK) != 0)
+                {
+                    ERR("Config file '%s' does not exist or is not readable", path);
+                    exit(EXIT_BAD_ARGS);
+                }
                 config_path=argv[i+1];
                 i++;
             }
     }
 
-    /* priority */
 
+    /* 1. -c config_path has highest priority */
     if(config_path){
         if(load_auth_file(config_path))
-            loaded=1;
+            loaded = 1;
     }
 
-    if(!loaded && load_auth_file(DEFAULT_AUTH_FILE))
-        loaded=1;
-
+    /* 2. Check current directory auth.txt */
     if(!loaded){
+        if(load_auth_file("auth.txt"))
+            loaded = 1;
+    }
 
-        const char *home=getenv("HOME");
+    /* 3. Fallback to HOME ~/.qbtctl/auth.txt */
+    if(!loaded){
+        const char *home = getenv("HOME");
 
         if(!home){
-            struct passwd *pw=getpwuid(getuid());
-            home=pw?pw->pw_dir:"/tmp";
+            struct passwd *pw = getpwuid(getuid());
+            home = pw ? pw->pw_dir : "/tmp";
         }
 
-        char home_path[512]={0};
+        char home_path[512] = {0};
 
-        snprintf(home_path,sizeof(home_path),
+        snprintf(home_path, sizeof(home_path),
                  "%s%s/%s",
                  home,
                  DEFAULT_AUTH_DIR,
                  DEFAULT_AUTH_FILE);
 
         if(load_auth_file(home_path))
-            loaded=1;
+            loaded = 1;
     }
 
     /* CLI override */
