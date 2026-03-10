@@ -351,14 +351,14 @@ gcc -O2 -static -s \
 # Getters (requires --hash)
 
 ```bash
-# Command                   Standard Output              --raw Output
+# Command                   Standard Output              --raw Output (bytes/secs/boolean)
 -gn, --get-name             Ubuntu.ISO                   "Ubuntu.ISO"
 -gt, --get-tags             Linux,ISO                    "Linux, ISO"
 -gc, --get-category         Linux ISOs                   "Linux ISOs"
--gu, --get-up-limit         512 (KB/s)                   524288
--gd, --get-dl-limit         1024 (KB/s)                  1048576
+-gu, --get-up-limit         512K (Kb/Mb/Gb)              524288
+-gd, --get-dl-limit         1024K (Kb/Mb/Gb)             1048576
 -gdp, --get-dl-path         /downloads/linux/iso.iso     "/downloads/linux/iso.iso"
--gr, --get-ratio            2.0                          2.0
+-gr, --get-ratio-limit      2.0                          2.0
 -gs, --get-seedtime         12:34:56                     45296
 -gsl,--get-seedtime-limit   24:00:00                     86400
 -gsd, --get-seqdl           0 (OFF)                      false
@@ -367,7 +367,15 @@ gcc -O2 -static -s \
 -gtr, --get-tracker         tracker.example.com          "tracker.example.com:port/announce"
 -gtl, --get-tracker-list    tracker1,tracker2            "udp.tracker1:port","tracker2:port"
 -gp, --get-private          1 (YES)                      true
+-gr, --get-ratio            0.2                          0.321596
+-gus, --get-up-speed        3.65K (Kb/Mb/Gb)             3618 
+-gds, --get-dl-speed        0 (Kb/Mb/Gb)                 0
+-gsz, --get-size            1.98G (Kb/Mb/Gb)             2125170914
+-gud, --get-uploaded        654.17M (Kb/Mb/Gb)           85946796
+-gdd, --get-downloaded      1.98G                        2126201670
+-ge, --get-eta              100:00:00 (100:00:00=inf.)   8640000
 -gst, --get-status          ForcedUP                     "ForcedUP"
+-gpr, --get-progress        100%                         1.000000
 ```
 ---
 ## ⚠ Exit / Error Codes
