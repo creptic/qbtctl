@@ -184,7 +184,15 @@ Auto TMM: 0
 Superseed: 0
 Tracker: http://tracker.foo.com
 Private: 0
-State: stalledUP
+Ratio: 0.20
+Upload Speed: 91.50K
+Download Speed: 0
+Size: 1.98G
+Uploaded: 404.07M
+Downloaded: 1.98G
+ETA: 100:00:00
+State: uploading
+Progress: 100%
 +------------------------------------------+
 
 ```
@@ -326,7 +334,20 @@ gcc -O2 -static -s \
 ```
 
 ---
-
+# Setters (requires --hash)
+```bash
+# Command                             Standard Input  --raw Input
+-sc <cat>, --set-category <cat>       Linux           Linux
+-st <tag>, --set-tags <tag>           Linux,ISO       Linux,ISO
+-sul <#>, --set-up-limit <#>          512 (KB/s)      524288
+-sdl <#>, --set-dl-limit <#>          1024 (KB/s)     1048576
+-srl <#>, --set-ratio-limit <#>       2.0             2.0
+-sst <#>, --set-seedtime-limit <#>    24:00:00        86400
+-ssd <val>, --set-seqdl <val>         1 (ON)          true
+-sat <val>, --set-autotmm <val>       0 (OFF)         false
+-sss <val>, --set-superseed <val>     0 (OFF)         false
+```
+---
 # Getters (requires --hash)
 
 ```bash
@@ -348,21 +369,7 @@ gcc -O2 -static -s \
 -gp, --get-private          1 (YES)                      true
 -gst, --get-status          ForcedUP                     "ForcedUP"
 ```
-
 ---
-# Setters (requires --hash)
-```bash
-# Command                             Standard Input  --raw Input
--sc <cat>, --set-category <cat>       Linux           Linux
--st <tag>, --set-tags <tag>           Linux,ISO       Linux,ISO
--sul <#>, --set-up-limit <#>          512 (KB/s)      524288
--sdl <#>, --set-dl-limit <#>          1024 (KB/s)     1048576
--srl <#>, --set-ratio-limit <#>       2.0             2.0
--sst <#>, --set-seedtime-limit <#>    24:00:00        86400
--ssd <val>, --set-seqdl <val>         1 (ON)          true
--sat <val>, --set-autotmm <val>       0 (OFF)         false
--sss <val>, --set-superseed <val>     0 (OFF)         false
-```
 ## ⚠ Exit / Error Codes
 
 ```bash
