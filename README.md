@@ -231,7 +231,7 @@ Enable sequential download and superseed:
 
 ---
 
-## 4. Pause, resume, or remove torrents
+## 4. Pause(stop), resume(start), or remove torrents
 
 Pause a torrent:
 
