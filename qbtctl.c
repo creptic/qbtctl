@@ -59,8 +59,9 @@ struct {
     long long size;      // bytes
     long long downloaded;// bytes
     long long uploaded;  // bytes
-    int dlspeed;         // bytes/sec
-    int upspeed;         // bytes/sec
+    long long dlspeed;         // bytes/sec
+    long long upspeed;         // bytes/sec
+    float ratio;
     long long eta;       // seconds remaining
 } torrent;
 
@@ -394,6 +395,9 @@ int populate_torrent_info_struct(CURL *curl)
     item = cJSON_GetObjectItem(obj, "state");
     if (cJSON_IsString(item)) safe_copy(torrent.state, sizeof(torrent.state), item->valuestring);
 
+    item = cJSON_GetObjectItem(obj, "ratio");
+    if (cJSON_IsNumber(item)) torrent.ratio = (float)item->valuedouble;
+
     /* ----- numeric fields ----- */
     item = cJSON_GetObjectItem(obj, "upspeed");
     if(item && cJSON_IsNumber(item))
@@ -460,6 +464,38 @@ static char *format_bool(bool value) {
     return buf;
 }
 
+static char *fmt_bytes(long long val)
+{
+    static char buf[64];
+
+    if(raw)
+    {
+        snprintf(buf, sizeof(buf), "%lld", val);
+        return buf;
+    }
+
+    if(val >= 1073741824)
+    {
+        double v = (double)val / 1073741824.0;
+        snprintf(buf, sizeof(buf), "%.2fG", v);
+    }
+    else if(val >= 1048576)
+    {
+        double v = (double)val / 1048576.0;
+        snprintf(buf, sizeof(buf), "%.2fM", v);
+    }
+    else if(val >= 1024)
+    {
+        double v = (double)val / 1024.0;
+        snprintf(buf, sizeof(buf), "%.2fK", v);
+    }
+    else
+    {
+        snprintf(buf, sizeof(buf), "%lld", val);
+    }
+
+    return buf;
+}
 char *get_private()  { return format_bool(torrent.is_private); }
 char *get_superseed() { return format_bool(torrent.superseed); }
 char *get_seq_dl()    { return format_bool(torrent.seq_dl); }
@@ -523,7 +559,7 @@ char *get_uplimit() {
     if(raw == 1) {
         snprintf(buf, sizeof(buf), "%d", torrent.up_limit);
     } else {
-        snprintf(buf, sizeof(buf), "%d", torrent.up_limit / 1024);
+        return fmt_bytes(torrent.up_limit);
     }
     return buf;
 }
@@ -533,7 +569,7 @@ char *get_downlimit() {
     if(raw == 1) {
         snprintf(buf, sizeof(buf), "%d", torrent.dl_limit);
     } else {
-        snprintf(buf, sizeof(buf), "%d", torrent.dl_limit / 1024);
+        return fmt_bytes(torrent.up_limit);
     }
     return buf;
 }
@@ -574,45 +610,45 @@ char *get_seedtime_limit() {
     return buf;
 }
 
+
 static char *get_upspeed(void)
+{
+
+    static char buf[64];
+
+    if(raw==0)
+    {
+        return fmt_bytes(torrent.upspeed);
+
+    }
+    else
+    {
+        snprintf(buf, sizeof(buf), "%lld", torrent.upspeed);
+    }
+
+    return buf;
+    return buf;
+}
+
+
+static char *get_dlspeed(void)
 {
     static char buf[64];
 
     if(raw==0)
     {
-        long long val = torrent.upspeed;
+        return fmt_bytes(torrent.dlspeed);;
 
-        if(val>=1048576)
-        {
-            double v = (double)val / 1048576.0;
-            if(if_watch)
-                snprintf(buf, sizeof(buf), "%.2fM/s", v);
-            else
-                snprintf(buf, sizeof(buf), "%.2f", v);
-        }
-        else if(val>=1024)
-        {
-            double v = (double)val / 1024.0;
-            if(if_watch)
-                snprintf(buf, sizeof(buf), "%.2fK/s", v);
-            else
-                snprintf(buf, sizeof(buf), "%.2f", v);
-        }
-        else
-        {
-            if(if_watch)
-                snprintf(buf, sizeof(buf), "%lldB/s", val);
-            else
-                snprintf(buf, sizeof(buf), "%lld", val);
-        }
     }
     else
     {
-        snprintf(buf, sizeof(buf), "%lld", (long long)torrent.upspeed);
+        snprintf(buf, sizeof(buf), "%lld", torrent.dlspeed);
     }
 
     return buf;
 }
+
+
 
 static char *get_uploaded(void)
 {
@@ -620,31 +656,8 @@ static char *get_uploaded(void)
 
     if(raw==0)
     {
-        long long val = torrent.uploaded;
+        return fmt_bytes(torrent.uploaded);;
 
-        if(val>=1048576)
-        {
-            double v = (double)val / 1048576.0;
-            if(if_watch)
-                snprintf(buf, sizeof(buf), "%.2fM/s", v);
-            else
-                snprintf(buf, sizeof(buf), "%.2f", v);
-        }
-        else if(val>=1024)
-        {
-            double v = (double)val / 1024.0;
-            if(if_watch)
-                snprintf(buf, sizeof(buf), "%.2fK/s", v);
-            else
-                snprintf(buf, sizeof(buf), "%.2f", v);
-        }
-        else
-        {
-            if(if_watch)
-                snprintf(buf, sizeof(buf), "%lldB/s", val);
-            else
-                snprintf(buf, sizeof(buf), "%lld", val);
-        }
     }
     else
     {
@@ -660,31 +673,8 @@ static char *get_downloaded(void)
 
     if(raw==0)
     {
-        long long val = torrent.downloaded;
+        return fmt_bytes(torrent.downloaded);;
 
-        if(val>=1048576)
-        {
-            double v = (double)val / 1048576.0;
-            if(if_watch)
-                snprintf(buf, sizeof(buf), "%.2fM/s", v);
-            else
-                snprintf(buf, sizeof(buf), "%.2f", v);
-        }
-        else if(val>=1024)
-        {
-            double v = (double)val / 1024.0;
-            if(if_watch)
-                snprintf(buf, sizeof(buf), "%.2fK/s", v);
-            else
-                snprintf(buf, sizeof(buf), "%.2f", v);
-        }
-        else
-        {
-            if(if_watch)
-                snprintf(buf, sizeof(buf), "%lldB/s", val);
-            else
-                snprintf(buf, sizeof(buf), "%lld", val);
-        }
     }
     else
     {
@@ -700,28 +690,8 @@ static char *get_size(void)
 
     if(raw==0)
     {
-        long long val = torrent.size;
+        return fmt_bytes(torrent.size);;
 
-        if(val>=1048576)
-        {
-            double v = (double)val / 1048576.0;
-            if(if_watch)
-                snprintf(buf, sizeof(buf), "%.2fM", v);
-            else
-                snprintf(buf, sizeof(buf), "%.2f", v);
-        }
-        else if(val>=1024)
-        {
-            double v = (double)val / 1024.0;
-            if(if_watch)
-                snprintf(buf, sizeof(buf), "%.2fK", v);
-            else
-                snprintf(buf, sizeof(buf), "%.2f", v);
-        }
-        else
-        {
-            snprintf(buf, sizeof(buf), "%lld", val);
-        }
     }
     else
     {
@@ -755,6 +725,34 @@ static char *get_eta(void)
     return buf;
 }
 
+char *get_ratio() {
+    static char buf[32];
+    if(raw == 1) {
+        snprintf(buf, sizeof(buf), "%f", torrent.ratio);
+    } else {
+        snprintf(buf, sizeof(buf), "%.2f", torrent.ratio);
+    }
+    return buf;
+}
+
+static char *get_progress(void)
+{
+    static char buf[64];
+
+    if(raw==0)
+    {
+        int pct = (int)(torrent.progress * 100.0);
+        if(pct > 100) pct = 100;
+        if(pct < 0) pct = 0;
+        snprintf(buf, sizeof(buf), "%d%%", pct);
+    }
+    else
+    {
+        snprintf(buf, sizeof(buf), "%.6f", torrent.progress);
+    }
+
+    return buf;
+}
 /* ================= GET TRACKER LIST ================= */
 int get_tracker_list(CURL *curl)
 {
@@ -939,7 +937,15 @@ void show_single_torrent_info()
     printf("Superseed: %s\n", get_superseed());
     printf("Tracker: %s\n", get_tracker());
     printf("Private: %s\n", get_private());
+    printf("Ratio: %s\n",get_ratio());
+    printf("Upload Speed: %s\n",get_upspeed());
+    printf("Download Speed: %s\n",get_dlspeed());
+    printf("Size: %s\n",get_size());
+    printf("Uploaded: %s\n",get_uploaded());
+    printf("Downloaded: %s\n",get_downloaded());
+    printf("ETA: %s\n",get_eta());
     printf("State: %s\n",get_state());
+    printf("Progress: %s\n",get_progress());
     printf("+------------------------------------------+\n");
 }
 
@@ -1890,10 +1896,10 @@ int main(int argc, char **argv)
             strcmp(argv[i], "-gn") == 0 || strcmp(argv[i], "--get-name") == 0 ||
             strcmp(argv[i], "-gt") == 0 || strcmp(argv[i], "--get-tags") == 0 ||
             strcmp(argv[i], "-gc") == 0 || strcmp(argv[i], "--get-category") == 0 ||
-            strcmp(argv[i], "-gu") == 0 || strcmp(argv[i], "--get-up-limit") == 0 ||
-            strcmp(argv[i], "-gd") == 0 || strcmp(argv[i], "--get-dl-limit") == 0 ||
+            strcmp(argv[i], "-gul") == 0 || strcmp(argv[i], "--get-up-limit") == 0 ||
+            strcmp(argv[i], "-gdl") == 0 || strcmp(argv[i], "--get-dl-limit") == 0 ||
             strcmp(argv[i], "-gdp") == 0 || strcmp(argv[i], "--get-dl-path") == 0 ||
-            strcmp(argv[i], "-gr") == 0 || strcmp(argv[i], "--get-ratio") == 0 ||
+            strcmp(argv[i], "-grl") == 0 || strcmp(argv[i], "--get-ratio-limit") == 0 ||
             strcmp(argv[i], "-gs") == 0 || strcmp(argv[i], "--get-seedtime") == 0 ||
             strcmp(argv[i], "-gsl") == 0 || strcmp(argv[i], "--get-seedtime-limit") == 0 ||
             strcmp(argv[i], "-gsd") == 0 || strcmp(argv[i], "--get-seqdl") == 0 ||
@@ -1902,7 +1908,15 @@ int main(int argc, char **argv)
             strcmp(argv[i], "-gtr") == 0 || strcmp(argv[i], "--get-tracker") == 0 ||
             strcmp(argv[i], "-gp") == 0 || strcmp(argv[i], "--get-private") == 0 ||
             strcmp(argv[i], "-gtl") == 0 || strcmp(argv[i], "--get-tracker-list") == 0 ||
-            strcmp(argv[i], "-gst") == 0 || strcmp(argv[i], "--get-status") == 0 ||
+            strcmp(argv[i], "-gr") == 0 || strcmp(argv[i], "--get-ratio") == 0 ||
+            strcmp(argv[i], "-gus") == 0 || strcmp(argv[i], "--get-up-speed") == 0 ||
+            strcmp(argv[i], "-gds") == 0 || strcmp(argv[i], "--get-dl-speed") == 0 ||
+            strcmp(argv[i], "-gsz") == 0 || strcmp(argv[i], "--get-size") == 0 ||
+            strcmp(argv[i], "-gud") == 0 || strcmp(argv[i], "--get-uploaded") == 0 ||
+            strcmp(argv[i], "-gdd") == 0 || strcmp(argv[i], "--get-downloaded") == 0 ||
+            strcmp(argv[i], "-ge") == 0 || strcmp(argv[i], "--get-eta") == 0 ||
+            strcmp(argv[i], "-gst") == 0 || strcmp(argv[i], "--get-state") == 0 ||
+            strcmp(argv[i], "-gpr") == 0 || strcmp(argv[i], "--get-progress") == 0 ||
             /*Setters*/
             strcmp(argv[i], "-sc") == 0 || strcmp(argv[i], "--set-category") == 0 ||
             strcmp(argv[i], "-sul") == 0 || strcmp(argv[i], "--set-up-limit") == 0 ||
@@ -1991,7 +2005,7 @@ int main(int argc, char **argv)
             did_action = true;
         } else if ((strcmp(arg, "-s") == 0 || strcmp(arg, "--show-single") == 0) && ensure_single_loaded(curl, &single_loaded)) {
                show_single_torrent_info();
-               continue;
+               exit(EXIT_OK);
             did_action = true;
         } else if ((strcmp(arg, "-sj") == 0 || strcmp(arg, "--show-single-json") == 0)) {
             show_json = 1;
@@ -2014,16 +2028,16 @@ int main(int argc, char **argv)
         } else if ((strcmp(arg, "-gc") == 0 || strcmp(arg, "--get-category") == 0) && ensure_single_loaded(curl, &single_loaded)) {
             printf("%s\n", get_category());
             did_action = true;
-        } else if ((strcmp(arg, "-gu") == 0 || strcmp(arg, "--get-up-limit") == 0) && ensure_single_loaded(curl, &single_loaded)) {
+        } else if ((strcmp(arg, "-gul") == 0 || strcmp(arg, "--get-up-limit") == 0) && ensure_single_loaded(curl, &single_loaded)) {
             printf("%s\n", get_uplimit());
             did_action = true;
-        } else if ((strcmp(arg, "-gd") == 0 || strcmp(arg, "--get-dl-limit") == 0) && ensure_single_loaded(curl, &single_loaded)) {
+        } else if ((strcmp(arg, "-gdl") == 0 || strcmp(arg, "--get-dl-limit") == 0) && ensure_single_loaded(curl, &single_loaded)) {
             printf("%s\n", get_downlimit());
             did_action = true;
         } else if ((strcmp(arg, "-gdp") == 0 || strcmp(arg, "--get-dl-path") == 0) && ensure_single_loaded(curl, &single_loaded)) {
             printf("%s\n", get_dl_path());
             did_action = true;
-        } else if ((strcmp(arg, "-gr") == 0 || strcmp(arg, "--get-ratio") == 0) && ensure_single_loaded(curl, &single_loaded)) {
+        } else if ((strcmp(arg, "-grl") == 0 || strcmp(arg, "--get-ratio-limit") == 0) && ensure_single_loaded(curl, &single_loaded)) {
             printf("%s\n", get_ratio_limit());
             did_action = true;
         } else if ((strcmp(arg, "-gs") == 0 || strcmp(arg, "--get-seedtime") == 0) && ensure_single_loaded(curl, &single_loaded)) {
@@ -2047,9 +2061,34 @@ int main(int argc, char **argv)
         } else if ((strcmp(arg, "-gp") == 0 || strcmp(arg, "--get-private") == 0) && ensure_single_loaded(curl, &single_loaded)) {
             printf("%s\n", get_private());
             did_action = true;
+        } else if ((strcmp(arg, "-gr") == 0 || strcmp(arg, "--get-ratio") == 0) && ensure_single_loaded(curl, &single_loaded)) {
+            printf("%s\n", get_ratio());
+            did_action = true;
+        } else if ((strcmp(arg, "-gus") == 0 || strcmp(arg, "--get-up-speed") == 0) && ensure_single_loaded(curl, &single_loaded)) {
+            printf("%s\n", get_upspeed());
+            did_action = true;
+        } else if ((strcmp(arg, "-gds") == 0 || strcmp(arg, "--get-dl-speed") == 0) && ensure_single_loaded(curl, &single_loaded)) {
+            printf("%s\n", get_dlspeed());
+            did_action = true;
+        } else if ((strcmp(arg, "-gsz") == 0 || strcmp(arg, "--get-size") == 0) && ensure_single_loaded(curl, &single_loaded)) {
+            printf("%s\n", get_size());
+            did_action = true;
+        } else if ((strcmp(arg, "-gud") == 0 || strcmp(arg, "--get-uploaded") == 0) && ensure_single_loaded(curl, &single_loaded)) {
+            printf("%s\n", get_uploaded());
+            did_action = true;
+        } else if ((strcmp(arg, "-gdd") == 0 || strcmp(arg, "--get-downloaded") == 0) && ensure_single_loaded(curl, &single_loaded)) {
+            printf("%s\n", get_downloaded());
+            did_action = true;
+        } else if ((strcmp(arg, "-ge") == 0 || strcmp(arg, "--get-eta") == 0) && ensure_single_loaded(curl, &single_loaded)) {
+            printf("%s\n", get_eta());
+            did_action = true;
         } else if ((strcmp(arg, "-gst") == 0 || strcmp(arg, "--get-state") == 0) && ensure_single_loaded(curl, &single_loaded)) {
             printf("%s\n", get_state());
             did_action = true;
+        } else if ((strcmp(arg, "-gpr") == 0 || strcmp(arg, "--get-progess") == 0) && ensure_single_loaded(curl, &single_loaded)) {
+            printf("%s\n", get_progress());
+            did_action = true;
+
         } else if ((strcmp(argv[i], "-sc") == 0 || strcmp(argv[i], "--set-category") == 0) && i + 1 < argc) {
             rc = set_category(curl, argv[++i]);
             if (rc != EXIT_OK) {
