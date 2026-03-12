@@ -144,7 +144,7 @@ linuxmint-22-cinnamon-64bit.iso     2.8G      37%        00:42:15      1.7M     
 +------------------------------------------------------------------------------------------------------------------------------------------------------------+
 ```
 
-## 1. Show all torrents
+## 2. Show all torrents
 
 ```bash
 ./qbtctl -a
@@ -177,7 +177,7 @@ With raw output (bytes, seconds, true/false):
 
 ---
 
-## 2. Show single torrent info (with or without raw)
+## 3. Show single torrent info (with or without raw)
 
 ```bash
 ./qbtctl -s -h 9c3289
@@ -227,7 +227,7 @@ With raw JSON:
 
 ---
 
-## 3. Modify torrent settings
+## 4. Modify torrent settings
 
 Set category and tags:
 
@@ -249,7 +249,7 @@ Enable sequential download and superseed:
 
 ---
 
-## 4. Pause(stop), resume(start), or remove torrents
+## 5. Pause(stop), resume(start), or remove torrents
 
 Pause a torrent:
 
@@ -277,7 +277,7 @@ Delete torrent and data:
 
 ---
 
-## 5. Move torrent data
+## 6. Move torrent data
 
 ```bash
 ./qbtctl -am /downloads/linux -h 9c3289
@@ -287,7 +287,7 @@ Moves the files to `/downloads/linux` on the server.
 
 ---
 
-## 6. Quick non-interactive run
+## 7. Quick non-interactive run
 
 If you want to run commands directly with credentials:
 
@@ -297,7 +297,7 @@ If you want to run commands directly with credentials:
 
 ---
 
-## 7. Docker One-Liner (Static Build & Run)
+## 8. Docker One-Liner (Static Build & Run)
 
 ```bash
 docker run --rm -v $(pwd):/out alpine:latest /bin/sh -c "
