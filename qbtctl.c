@@ -12,9 +12,11 @@
 #include <stdint.h>
 #include <curl/curl.h>
 #include <ctype.h>
+#include <unistd.h>
 
 void show_help(void);
 
+#define QBTCTL_VERSION "1.4.1"
 #define MAX_JSON 1048576
 #define HASH_WIDTH 40
 
@@ -27,15 +29,20 @@ void show_help(void);
 #define EXIT_BAD_ARGS       4
 #define EXIT_FILE           5
 #define EXIT_ACTION_FAIL    6
-
-
 #define ERR(fmt, ...) fprintf(stderr, "[ERROR] " fmt "\n", ##__VA_ARGS__)
+
 
 int show_all_clean = 0;
 int show_json = 0;
 int show_all_json = 0;
 int raw = 0;
 bool if_watch = false;
+
+void show_version(void)
+{
+    printf("qbtctl %s\n", QBTCTL_VERSION);
+    printf("Minimal qBittorrent CLI client\n");
+}
 
 /* ================= GLOBAL TORRENT ================= */
 struct {
@@ -464,38 +471,18 @@ static char *format_bool(bool value) {
     return buf;
 }
 
-static char *fmt_bytes(long long val)
+void fmt_bytes(char *buf, size_t sz, long long bytes)
 {
-    static char buf[64];
-
-    if(raw)
-    {
-        snprintf(buf, sizeof(buf), "%lld", val);
-        return buf;
-    }
-
-    if(val >= 1073741824)
-    {
-        double v = (double)val / 1073741824.0;
-        snprintf(buf, sizeof(buf), "%.2fG", v);
-    }
-    else if(val >= 1048576)
-    {
-        double v = (double)val / 1048576.0;
-        snprintf(buf, sizeof(buf), "%.2fM", v);
-    }
-    else if(val >= 1024)
-    {
-        double v = (double)val / 1024.0;
-        snprintf(buf, sizeof(buf), "%.2fK", v);
-    }
+    if(bytes >= 1073741824)
+        snprintf(buf,sz,"%.2fG", bytes / 1073741824.0);
+    else if(bytes >= 1048576)
+        snprintf(buf,sz,"%.2fM", bytes / 1048576.0);
+    else if(bytes >= 1024)
+        snprintf(buf,sz,"%.2fK", bytes / 1024.0);
     else
-    {
-        snprintf(buf, sizeof(buf), "%lld", val);
-    }
-
-    return buf;
+        snprintf(buf,sz,"%lldB", bytes);
 }
+
 char *get_private()  { return format_bool(torrent.is_private); }
 char *get_superseed() { return format_bool(torrent.superseed); }
 char *get_seq_dl()    { return format_bool(torrent.seq_dl); }
@@ -555,22 +542,32 @@ char *get_tracker(void)
     return formatted;
 }
 char *get_uplimit() {
-    static char buf[32];
-    if(raw == 1) {
-        snprintf(buf, sizeof(buf), "%d", torrent.up_limit);
-    } else {
-        return fmt_bytes(torrent.up_limit);
+    static char buf[64];
+
+    if(raw == 0)
+    {
+        fmt_bytes(buf, sizeof(buf), torrent.up_limit);
     }
+    else
+    {
+        snprintf(buf, sizeof(buf), "%d", torrent.up_limit);
+    }
+
     return buf;
 }
 
 char *get_downlimit() {
-    static char buf[32];
-    if(raw == 1) {
-        snprintf(buf, sizeof(buf), "%d", torrent.dl_limit);
-    } else {
-        return fmt_bytes(torrent.up_limit);
+    static char buf[64];
+
+    if(raw == 0)
+    {
+        fmt_bytes(buf, sizeof(buf), torrent.dl_limit);
     }
+    else
+    {
+        snprintf(buf, sizeof(buf), "%d", torrent.dl_limit);
+    }
+
     return buf;
 }
 
@@ -613,20 +610,17 @@ char *get_seedtime_limit() {
 
 static char *get_upspeed(void)
 {
-
     static char buf[64];
 
-    if(raw==0)
+    if(raw == 0)
     {
-        return fmt_bytes(torrent.upspeed);
-
+        fmt_bytes(buf, sizeof(buf), torrent.upspeed);
     }
     else
     {
         snprintf(buf, sizeof(buf), "%lld", torrent.upspeed);
     }
 
-    return buf;
     return buf;
 }
 
@@ -635,10 +629,9 @@ static char *get_dlspeed(void)
 {
     static char buf[64];
 
-    if(raw==0)
+    if(raw == 0)
     {
-        return fmt_bytes(torrent.dlspeed);;
-
+        fmt_bytes(buf, sizeof(buf), torrent.dlspeed);
     }
     else
     {
@@ -654,10 +647,9 @@ static char *get_uploaded(void)
 {
     static char buf[64];
 
-    if(raw==0)
+    if(raw == 0)
     {
-        return fmt_bytes(torrent.uploaded);;
-
+        fmt_bytes(buf, sizeof(buf), torrent.uploaded);
     }
     else
     {
@@ -671,10 +663,9 @@ static char *get_downloaded(void)
 {
     static char buf[64];
 
-    if(raw==0)
+    if(raw == 0)
     {
-        return fmt_bytes(torrent.downloaded);;
-
+        fmt_bytes(buf, sizeof(buf), torrent.downloaded);
     }
     else
     {
@@ -688,10 +679,9 @@ static char *get_size(void)
 {
     static char buf[64];
 
-    if(raw==0)
+    if(raw == 0)
     {
-        return fmt_bytes(torrent.size);;
-
+        fmt_bytes(buf, sizeof(buf), torrent.size);
     }
     else
     {
@@ -1835,6 +1825,213 @@ int stop_and_remove_torrent(CURL *curl, bool delete_files)
     return rc;
 }
 
+
+// helper to convert full state to short code
+static const char* short_state(const char *state)
+{
+    if(!state) return "?";
+    if(strcmp(state,"downloading")==0) return "DOWNLOAD";
+    if(strcmp(state,"uploading")==0) return "UPLOAD";
+    if(strcmp(state,"paused")==0) return "PAUSED";
+    if(strcmp(state,"queued")==0) return "QUEUED";
+    if(strcmp(state,"forcedUP")==0) return "FORCEDUP";
+    if(strcmp(state,"stalledDL")==0) return "SD";
+    if(strcmp(state,"stalledUP")==0) return "SU";
+    if(strcmp(state,"checking")==0) return "CHK";
+    if(strcmp(state,"error")==0) return "ERR";
+    return state; // fallback: print original
+}
+
+// helper to format ETA as DD:HH:MM
+static void format_eta(char *buf, size_t len, long long seconds)
+{
+    if(seconds <= 0 || seconds >= 8640000) // >= 100 days = ∞
+    {
+        snprintf(buf, len, "00:00:00");
+        return;
+    }
+
+    long long days = seconds / 86400;
+    seconds %= 86400;
+    long long hours = seconds / 3600;
+    seconds %= 3600;
+    long long mins = seconds / 60;
+
+    snprintf(buf,len,"%02lld:%02lld:%02lld",days,hours,mins);
+}
+
+int watch_all_torrents(CURL *curl)
+{
+    if(!curl) return 0;
+
+    while (1)
+    {
+        // ---- clear screen at start of each iteration ----
+        printf("\033[2J"); // clear
+        printf("\033[H");  // move cursor to top-left
+
+        char url[512];
+        snprintf(url,sizeof(url),"%s/api/v2/torrents/info",creds.qbt_url);
+
+        char *json = qbt_get_json(curl,url);
+        if(!json) return 0;
+
+        cJSON *root = cJSON_Parse(json);
+        free(json);
+        if(!root || !cJSON_IsArray(root))
+        {
+            if(root) cJSON_Delete(root);
+            return 0;
+        }
+
+        int count = cJSON_GetArraySize(root);
+        if(count <= 0)
+        {
+            cJSON_Delete(root);
+            printf("No torrents\n");
+            sleep(5);
+            continue;
+        }
+
+        // ---- temp arrays ----
+        const char *names[count], *states[count], *tags[count], *categories[count];
+        long long sizes[count], dls[count], uls[count], etas[count], uploaded[count], downloaded[count];
+        double progs[count];
+
+        long long total_dl = 0;
+        long long total_ul = 0;
+        int active_torrents = 0;
+
+        for(int i=0;i<count;i++)
+        {
+            cJSON *obj = cJSON_GetArrayItem(root,i);
+            cJSON *item;
+
+            names[i] = "";
+            states[i] = "";
+            tags[i] = "";
+            categories[i] = "";
+            sizes[i] = dls[i] = uls[i] = etas[i] = uploaded[i] = downloaded[i] = 0;
+            progs[i] = 0;
+
+            item = cJSON_GetObjectItem(obj,"name");
+            if(cJSON_IsString(item)) names[i] = item->valuestring;
+
+            item = cJSON_GetObjectItem(obj,"state");
+            if(cJSON_IsString(item)) states[i] = item->valuestring;
+
+            item = cJSON_GetObjectItem(obj,"tags");
+            if(cJSON_IsString(item)) tags[i] = item->valuestring;
+
+            item = cJSON_GetObjectItem(obj,"category");
+            if(cJSON_IsString(item)) categories[i] = item->valuestring;
+
+            item = cJSON_GetObjectItem(obj,"total_size");
+            if(cJSON_IsNumber(item)) sizes[i] = (long long)item->valuedouble;
+
+            item = cJSON_GetObjectItem(obj,"progress");
+            if(cJSON_IsNumber(item)) progs[i] = item->valuedouble;
+
+            item = cJSON_GetObjectItem(obj,"eta");
+            if(cJSON_IsNumber(item)) etas[i] = (long long)item->valuedouble;
+
+            item = cJSON_GetObjectItem(obj,"dlspeed");
+            if(cJSON_IsNumber(item)) dls[i] = (long long)item->valuedouble;
+
+            item = cJSON_GetObjectItem(obj,"upspeed");
+            if(cJSON_IsNumber(item)) uls[i] = (long long)item->valuedouble;
+
+            item = cJSON_GetObjectItem(obj,"downloaded");
+            if(cJSON_IsNumber(item)) downloaded[i] = (long long)item->valuedouble;
+
+            item = cJSON_GetObjectItem(obj,"uploaded");
+            if(cJSON_IsNumber(item)) uploaded[i] = (long long)item->valuedouble;
+
+            total_dl += dls[i];
+            total_ul += uls[i];
+
+            if(strcmp(states[i],"downloading")==0 || strcmp(states[i],"uploading")==0)
+                active_torrents++;
+        }
+
+        // ---- sort by DL speed descending ----
+        for(int i=0;i<count-1;i++)
+        {
+            for(int j=i+1;j<count;j++)
+            {
+                if(dls[i] < dls[j])
+                {
+                    const char *tmp_s;
+                    long long tmp_ll;
+                    double tmp_d;
+
+                    tmp_s = names[i]; names[i]=names[j]; names[j]=tmp_s;
+                    tmp_s = states[i]; states[i]=states[j]; states[j]=tmp_s;
+                    tmp_s = tags[i]; tags[i]=tags[j]; tags[j]=tmp_s;
+                    tmp_s = categories[i]; categories[i]=categories[j]; categories[j]=tmp_s;
+
+                    tmp_ll = sizes[i]; sizes[i]=sizes[j]; sizes[j]=tmp_ll;
+                    tmp_ll = dls[i]; dls[i]=dls[j]; dls[j]=tmp_ll;
+                    tmp_ll = uls[i]; uls[i]=uls[j]; uls[j]=tmp_ll;
+                    tmp_ll = etas[i]; etas[i]=etas[j]; etas[j]=tmp_ll;
+                    tmp_ll = uploaded[i]; uploaded[i]=uploaded[j]; uploaded[j]=tmp_ll;
+                    tmp_ll = downloaded[i]; downloaded[i]=downloaded[j]; downloaded[j]=tmp_ll;
+
+                    tmp_d = progs[i]; progs[i]=progs[j]; progs[j]=tmp_d;
+                }
+            }
+        }
+
+        // ---- print top summary ----
+        char total_dl_buf[32], total_ul_buf[32];
+        fmt_bytes(total_dl_buf,sizeof(total_dl_buf),total_dl);
+        fmt_bytes(total_ul_buf,sizeof(total_ul_buf),total_ul);
+
+        printf("Active torrents: %d | Total DL: %s | Total UL: %s\n\n",
+               active_torrents,total_dl_buf,total_ul_buf);
+
+
+        // ---- table header including ETA and State ----
+        printf("%-35s %10s %8s %14s %10s %10s %12s %12s %-18s %-16s %-14s\n",
+               "Name","Size","Progress","ETA","DL","UL","Downloaded","Uploaded","Tags","Category","State");
+        printf("+---------------------------------------------------------------------------------------------------------------------------------------------------------------------+\n");
+
+        // ---- print rows ----
+        for(int i=0;i<count;i++)
+        {
+            char size_buf[32], dl_buf[32], ul_buf[32], downloaded_buf[32], uploaded_buf[32], eta_buf[16], prog_buf[16];
+            fmt_bytes(size_buf,sizeof(size_buf),sizes[i]);
+            fmt_bytes(dl_buf,sizeof(dl_buf),dls[i]);
+            fmt_bytes(ul_buf,sizeof(ul_buf),uls[i]);
+            fmt_bytes(downloaded_buf,sizeof(downloaded_buf),downloaded[i]);
+            fmt_bytes(uploaded_buf,sizeof(uploaded_buf),uploaded[i]);
+            snprintf(prog_buf,sizeof(prog_buf),"%.0f%%",progs[i]*100.0);
+            format_eta(eta_buf,sizeof(eta_buf),etas[i]); // DD:HH:MM or ∞
+
+            printf("%-35.35s %10s %8s %14s %10s %10s %12s %12s %-18.18s %-16.16s %-14.14s\n",
+                   names[i],
+                   size_buf,
+                   prog_buf,
+                   eta_buf,
+                   dl_buf,
+                   ul_buf,
+                   downloaded_buf,
+                   uploaded_buf,
+                   tags[i],
+                   categories[i],
+                   states[i]);
+        }
+
+        printf("+---------------------------------------------------------------------------------------------------------------------------------------------------------------------+\n");
+        printf("<ctrl>+c to quit\n");
+
+        cJSON_Delete(root);
+        fflush(stdout);
+        sleep(2);
+    }
+
+    return 1;
+}
 /* ================= OPTIONAL HTTPS (todo)SUPPORT ================= */
  static void configure_https_if_needed(CURL *curl)
  {
@@ -1855,16 +2052,29 @@ int stop_and_remove_torrent(CURL *curl, bool delete_files)
 
 int main(int argc, char **argv)
 {
+    if(argc > 1)
+    {
+        for(int i = 1; i < argc; i++)
+        {
+            if(strcmp(argv[i], "-v") == 0 || strcmp(argv[i], "--version") == 0)
+            {
+                printf("qbtctl %s\n", QBTCTL_VERSION);
+                exit(EXIT_OK);
+            }
+            if(strcmp(argv[i], "-help") == 0 || strcmp(argv[i], "--help") == 0)
+            {
+                show_help();
+                exit(EXIT_OK);
+
+            }
+        }
+    }
 
     if (argc == 1) {
         printf("No command specified. Use qbtctl --help\n");
         exit(EXIT_BAD_ARGS);
     }
 
-    if (strcmp(argv[1], "--help") == 0){
-        show_help();
-        exit(EXIT_OK);
-    }
 
     /* =========== CHECK AUTH / SET CREDS ============== */
     int rc = init_auth(argc, argv);
@@ -1879,10 +2089,7 @@ int main(int argc, char **argv)
 
     /* ================= PARSE CLI ================= */
     for (int i = 1; i < argc; i++) {
-        if (strcmp(argv[i], "--help") == 0) {
-            show_help();
-            return EXIT_OK;
-        }
+
         if (strcmp(argv[i], "-r") == 0 || strcmp(argv[i], "--raw") == 0)
             raw = 1;
 
@@ -2085,7 +2292,7 @@ int main(int argc, char **argv)
         } else if ((strcmp(arg, "-gst") == 0 || strcmp(arg, "--get-state") == 0) && ensure_single_loaded(curl, &single_loaded)) {
             printf("%s\n", get_state());
             did_action = true;
-        } else if ((strcmp(arg, "-gpr") == 0 || strcmp(arg, "--get-progess") == 0) && ensure_single_loaded(curl, &single_loaded)) {
+        } else if ((strcmp(arg, "-gpr") == 0 || strcmp(arg, "--get-progress") == 0) && ensure_single_loaded(curl, &single_loaded)) {
             printf("%s\n", get_progress());
             did_action = true;
 
@@ -2209,17 +2416,25 @@ int main(int argc, char **argv)
                 return rc;
             }
             did_action = true;
+        } else if ((strcmp(arg, "-w") == 0 || strcmp(arg, "--watch") == 0)) {
+            rc =  watch_all_torrents(curl);
+            if (rc != EXIT_OK) {
+                curl_easy_cleanup(curl);
+                curl_global_cleanup();
+                return rc;
+            }
+            did_action = true;
         }
     }
 
     curl_easy_cleanup(curl);
     curl_global_cleanup();
 
+
     if (!did_action) {
-        if (!did_action) {
-            printf("No command specified. Use qbtctl --help\n");
-            return EXIT_BAD_ARGS;
-        }
+        printf("No command specified. Use qbtctl --help\n");
+        return EXIT_BAD_ARGS;
     }
+
     return EXIT_OK;
 }

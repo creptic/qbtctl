@@ -7,8 +7,9 @@ void show_help()
     printf("Usage:\n");
     printf("  qbtctl [options] [getters setters or actions]\n");
     printf("**Options:\n");
-    printf("  --help               Show this help message\n");
+    printf("  -help, --help        Show this help message\n");
     printf("  -i, --setup          Setup server credentials interactively (save/test auth.txt)\n");
+    printf("  -w, --watch          Watch status of all torrents in a table (refreshes) \n");
     printf("  -c <path>            Alternate auth.txt path (ex: /home/user/auth.txt)\n");
     printf("  -r, --raw            Raw output mode (bytes, seconds, true/false\n");
     printf("  --url <url>          qBittorrent WebUI URL (ex: http://localhost:8080)\n");
@@ -20,6 +21,7 @@ void show_help()
     printf("  -aj, --show-all-json Show all torrents info as json\n");
     printf("  -s, --show-single    Show basic single torrent info (requires hash)\n");
     printf("  -sj, --show-single-json   Show single torrent info as json (requires hash)\n");
+    printf("  -v, --version        Show version and exit\n");
     printf("**Actions (requires hash) (per torrent)\n");
     printf("  -am <path>, --move <path> Move torrent to <path on server> (use with caution)\n");
     printf("  -as, --start         Start torrent\n");
