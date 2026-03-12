@@ -1,3 +1,24 @@
+/*
+ * help.c
+ * -----------------------------
+ * Purpose: Provides help and usage information for the qbtctl CLI.
+ *          Handles printing command lists, flags, examples, and detailed
+ *          instructions for users.
+ *
+ * Version: 1.4.1
+ * Date:    2026-03-11
+ *
+ * Features:
+ *   - Displays full help for all commands and options
+ *   - Supports concise usage hints for quick reference
+ *   - Integration with main CLI to show context-sensitive help
+ *   - Clear formatting for terminal output
+ *
+ * Author:  Creptic
+ * GitHub:  https://github.com/creptic/qbtctl
+ */
+
+
 #include <stdio.h>
 #include "help.h"
 

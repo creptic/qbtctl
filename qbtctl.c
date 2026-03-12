@@ -1,6 +1,26 @@
 /*
- * qbtctl - qBittorrent CLI by Creptic 2026
- * Ultra-fast streaming parser
+ * qbtctl.c
+ * -----------------------------
+ * Purpose: Minimal, ultra-fast command-line interface for monitoring and controlling qBittorrent
+ *          via its Web API. Includes live torrent monitoring, sorting, and torrent info display.
+ *
+ * Version: 1.4.1
+ * Date:    2026-03-11
+ *
+ * Features:
+ *   - Set/Get a torrent settings in real time
+ *   - Start/Stop/Move a torrent
+ *   - Fetch and display all torrents in one API call
+ *   - Live watch mode with auto-refresh every 5 seconds
+ *   - Shows Name, Size, Progress, ETA, Download/Upload speed,
+ *   - Uploaded/Downloaded totals, Tags, Category, State
+ *   - Sorts by download speed
+ *   - Formatted ETA (DD:HH:MM)
+ *   - Clears terminal each refresh to prevent artifacts
+ *   - Supports --version / -v flags
+ *
+ * Author:  Creptic
+ * GitHub:  https://github.com/creptic/qbtctl
  */
 #include "help.h"
 #include "auth.h"
@@ -41,7 +61,6 @@ bool if_watch = false;
 void show_version(void)
 {
     printf("qbtctl %s\n", QBTCTL_VERSION);
-    printf("Minimal qBittorrent CLI client\n");
 }
 
 /* ================= GLOBAL TORRENT ================= */
@@ -1826,21 +1845,7 @@ int stop_and_remove_torrent(CURL *curl, bool delete_files)
 }
 
 
-// helper to convert full state to short code
-static const char* short_state(const char *state)
-{
-    if(!state) return "?";
-    if(strcmp(state,"downloading")==0) return "DOWNLOAD";
-    if(strcmp(state,"uploading")==0) return "UPLOAD";
-    if(strcmp(state,"paused")==0) return "PAUSED";
-    if(strcmp(state,"queued")==0) return "QUEUED";
-    if(strcmp(state,"forcedUP")==0) return "FORCEDUP";
-    if(strcmp(state,"stalledDL")==0) return "SD";
-    if(strcmp(state,"stalledUP")==0) return "SU";
-    if(strcmp(state,"checking")==0) return "CHK";
-    if(strcmp(state,"error")==0) return "ERR";
-    return state; // fallback: print original
-}
+/* !================ Live Watch ================! */
 
 // helper to format ETA as DD:HH:MM
 static void format_eta(char *buf, size_t len, long long seconds)
@@ -1850,7 +1855,6 @@ static void format_eta(char *buf, size_t len, long long seconds)
         snprintf(buf, len, "00:00:00");
         return;
     }
-
     long long days = seconds / 86400;
     seconds %= 86400;
     long long hours = seconds / 3600;
@@ -2074,7 +2078,6 @@ int main(int argc, char **argv)
         printf("No command specified. Use qbtctl --help\n");
         exit(EXIT_BAD_ARGS);
     }
-
 
     /* =========== CHECK AUTH / SET CREDS ============== */
     int rc = init_auth(argc, argv);

@@ -1,5 +1,22 @@
-/* auth.c by Creptic 2026 */
-/* AES encryption using libsodium; interactive + CLI auth handling */
+/*
+ * auth.c
+ * -----------------------------
+ * Purpose: Handles authentication for qbtctl CLI, including credential initialization,
+ *          secure password storage, and integration with the qBittorrent Web API.
+ *
+ * Version: 1.4.1
+ * Date:    2026-03-11
+ *
+ * Features:
+ *   - Initialize authentication from command-line arguments or stored credentials
+ *   - Support for encrypted password files (libsodium)
+ *   - Silent login without prompting for password on CLI
+ *   - Integration with qbtctl main functions for API actions
+ *   - Ensures credentials are not visible in process lists
+ *
+ * Author:  Creptic
+ * GitHub:  https://github.com/creptic/qbtctl
+ */
 
 #include "auth.h"
 #include <stdio.h>

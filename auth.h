@@ -1,5 +1,22 @@
-/*======== AUTH HEADER ========*/
-/* Handles qBittorrent authentication: credentials, file I/O, and CLI overrides */
+/*
+ * auth.h
+ * -----------------------------
+ * Purpose: Declares authentication functions, structures, and constants
+ *          for the qbtctl CLI. Provides secure handling of credentials
+ *          for qBittorrent Web API access.
+ *
+ * Version: 1.4.1
+ * Date:    2026-03-11
+ *
+ * Features:
+ *   - Defines authentication structs for username/password storage
+ *   - Declares functions for initializing, validating, and saving credentials
+ *   - Integrates with CLI to securely pass credentials without exposing them
+ *   - Supports optional encrypted storage for local authentication
+ *
+ * Author:  Creptic
+ * GitHub:  https://github.com/creptic/qbtctl
+ */
 
 #ifndef AUTH_H
 #define AUTH_H
