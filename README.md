@@ -121,10 +121,28 @@ You may override credentials when running commands:
 
 ---
 # 💡 Usage Examples
-
 These examples assume you have already set up credentials with `./qbtctl --setup`.
 
----
+## 1. Watch all torrents
+
+```bash
+./qbtctl -w
+```
+
+**Example output:**
+
+```
+Active torrents: 3 | Total DL: 28.6M | Total UL: 1.4M
+
+Name                                Size      Progress        ETA        DL        UL     Downloaded     Uploaded Tags               Category        State
++------------------------------------------------------------------------------------------------------------------------------------------------------------+
+ubuntu-24.04-desktop-amd64.iso      4.7G      63%        00:18:42     18.3M     210K       2.98G        55.1M   Linux, ISO         linux           downloading
+archlinux-2026.03.01-x86_64.iso     1.1G      92%        00:02:11      8.6M     430K       1.02G        89.4M   Linux, ISO         linux           downloading
+debian-12.10.0-amd64-netinst.iso    647M      100%       00:00:00       0B       0B       647.2M       312.7M   Linux, ISO         linux           stalledUP
+fedora-workstation-live-x86_64.iso  2.2G      100%       00:00:00       0B     812K        2.2G         1.48G   Linux, ISO         linux           uploading
+linuxmint-22-cinnamon-64bit.iso     2.8G      37%        00:42:15      1.7M      0B        1.04G        12.4M   Linux, ISO         linux           downloading
++------------------------------------------------------------------------------------------------------------------------------------------------------------+
+```
 
 ## 1. Show all torrents
 
@@ -132,7 +150,7 @@ These examples assume you have already set up credentials with `./qbtctl --setup
 ./qbtctl -a
 ```
 
-**Example output:**
+
 
 ```text
 
@@ -305,8 +323,9 @@ gcc -O2 -static -s \
 # Options
 
 ```bash
---help                   Show help message
+-help, --help                   Show help message
 -i, --setup              Setup server credentials interactively
+-w, --watch              Watch all torrent stats in real time
 -c <path>                Alternate auth file path
 -r, --raw                Raw output mode (bytes, seconds, true/false)
 --url <url>              qBittorrent WebUI URL (ex: http://localhost:8080)
@@ -318,6 +337,7 @@ gcc -O2 -static -s \
 -aj, --show-all-json     Show all torrents info as JSON
 -s, --show-single        Show single torrent info (requires hash)
 -sj, --show-single-json  Show single torrent info as JSON (requires hash)
+-v, --version            Show version and exit
 ```
 
 ---
