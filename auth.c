@@ -444,6 +444,33 @@ int interactive_setup()
 
     exit (EXIT_OK);
 }
+
+
+static int load_auth_from_binary_dir()
+{
+    char exe[PATH_MAX]={0};
+    char path[PATH_MAX]={0};
+
+    ssize_t len = readlink("/proc/self/exe", exe, sizeof(exe)-1);
+
+    if(len<=0)
+        return 0;
+
+    exe[len]='\0';
+
+    char *slash = strrchr(exe,'/');
+
+    if(!slash)
+        return 0;
+
+    *slash = 0;
+
+    snprintf(path,sizeof(path),"%s/auth.txt",exe);
+
+    return load_auth_file(path);
+}
+
+
 /* ----------------- INIT AUTH ----------------- */
 int init_auth(int argc, char **argv)
 {
@@ -510,7 +537,14 @@ int init_auth(int argc, char **argv)
             loaded = 1;
     }
 
-    /* 3. Fallback to HOME ~/.qbtctl/auth.txt */
+
+   if(!loaded){
+       if(load_auth_from_binary_dir())
+           loaded = 1;
+   }
+
+
+   /* 3. Fallback to HOME ~/.qbtctl/auth.txt */
     if(!loaded){
         const char *home = getenv("HOME");
 
