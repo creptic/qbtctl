@@ -4,7 +4,7 @@
  * Purpose: Minimal, ultra-fast command-line interface for monitoring and controlling qBittorrent
  *          via its Web API. Includes live torrent monitoring, sorting, and torrent info display.
  *
- * Version: 1.4.1
+ * Version: 1.4.2
  * Date:    2026-03-11
  *
  * Features:
@@ -1870,9 +1870,8 @@ int watch_all_torrents(CURL *curl)
 
     while (1)
     {
-        // ---- clear screen at start of each iteration ----
-        printf("\033[2J"); // clear
-        printf("\033[H");  // move cursor to top-left
+        printf("\033[2J");
+        printf("\033[H");
 
         char url[512];
         snprintf(url,sizeof(url),"%s/api/v2/torrents/info",creds.qbt_url);
@@ -1898,7 +1897,7 @@ int watch_all_torrents(CURL *curl)
         }
 
         // ---- temp arrays ----
-        const char *names[count], *states[count], *tags[count], *categories[count];
+        const char *names[count], *states[count], *tags[count], *categories[count], *hashes[count];
         long long sizes[count], dls[count], uls[count], etas[count], uploaded[count], downloaded[count];
         double progs[count];
 
@@ -1915,6 +1914,7 @@ int watch_all_torrents(CURL *curl)
             states[i] = "";
             tags[i] = "";
             categories[i] = "";
+            hashes[i] = "";
             sizes[i] = dls[i] = uls[i] = etas[i] = uploaded[i] = downloaded[i] = 0;
             progs[i] = 0;
 
@@ -1929,6 +1929,9 @@ int watch_all_torrents(CURL *curl)
 
             item = cJSON_GetObjectItem(obj,"category");
             if(cJSON_IsString(item)) categories[i] = item->valuestring;
+
+            item = cJSON_GetObjectItem(obj,"hash");
+            if(cJSON_IsString(item)) hashes[i] = item->valuestring;
 
             item = cJSON_GetObjectItem(obj,"total_size");
             if(cJSON_IsNumber(item)) sizes[i] = (long long)item->valuedouble;
@@ -1973,6 +1976,7 @@ int watch_all_torrents(CURL *curl)
                     tmp_s = states[i]; states[i]=states[j]; states[j]=tmp_s;
                     tmp_s = tags[i]; tags[i]=tags[j]; tags[j]=tmp_s;
                     tmp_s = categories[i]; categories[i]=categories[j]; categories[j]=tmp_s;
+                    tmp_s = hashes[i]; hashes[i]=hashes[j]; hashes[j]=tmp_s;
 
                     tmp_ll = sizes[i]; sizes[i]=sizes[j]; sizes[j]=tmp_ll;
                     tmp_ll = dls[i]; dls[i]=dls[j]; dls[j]=tmp_ll;
@@ -1986,34 +1990,36 @@ int watch_all_torrents(CURL *curl)
             }
         }
 
-        // ---- print top summary ----
         char total_dl_buf[32], total_ul_buf[32];
         fmt_bytes(total_dl_buf,sizeof(total_dl_buf),total_dl);
         fmt_bytes(total_ul_buf,sizeof(total_ul_buf),total_ul);
 
-        printf("Active torrents: %d | Total DL: %s | Total UL: %s\n\n",
+        printf("\n Active torrents: %d | Total DL: %s | Total UL: %s\n\n",
                active_torrents,total_dl_buf,total_ul_buf);
 
+        // ---- header ----
+        printf("+-------------------------------------+--------+----------+------+----------+----------+----------+----------+----------+--------------------+--------------+-----------+\n");
+        printf("| %-35s | %-6s | %8s | %4s | %8s | %8s | %8s | %8s | %8s | %-18s | %-12s | %-10s|\n",
+               " Name","Hash","Size","Prog","ETA","DL","UL","Download","Upload","Tags","Category","State");
 
-        // ---- table header including ETA and State ----
-        printf("%-35s %10s %8s %14s %10s %10s %12s %12s %-18s %-16s %-14s\n",
-               "Name","Size","Progress","ETA","DL","UL","Downloaded","Uploaded","Tags","Category","State");
-        printf("+---------------------------------------------------------------------------------------------------------------------------------------------------------------------+\n");
+        printf("+-------------------------------------+--------+----------+------+----------+----------+----------+----------+----------+--------------------+--------------+-----------+\n");
 
-        // ---- print rows ----
         for(int i=0;i<count;i++)
         {
             char size_buf[32], dl_buf[32], ul_buf[32], downloaded_buf[32], uploaded_buf[32], eta_buf[16], prog_buf[16];
+
             fmt_bytes(size_buf,sizeof(size_buf),sizes[i]);
             fmt_bytes(dl_buf,sizeof(dl_buf),dls[i]);
             fmt_bytes(ul_buf,sizeof(ul_buf),uls[i]);
             fmt_bytes(downloaded_buf,sizeof(downloaded_buf),downloaded[i]);
             fmt_bytes(uploaded_buf,sizeof(uploaded_buf),uploaded[i]);
-            snprintf(prog_buf,sizeof(prog_buf),"%.0f%%",progs[i]*100.0);
-            format_eta(eta_buf,sizeof(eta_buf),etas[i]); // DD:HH:MM or ∞
 
-            printf("%-35.35s %10s %8s %14s %10s %10s %12s %12s %-18.18s %-16.16s %-14.14s\n",
+            snprintf(prog_buf,sizeof(prog_buf),"%.0f%%",progs[i]*100.0);
+            format_eta(eta_buf,sizeof(eta_buf),etas[i]);
+
+            printf("| %-35.35s | %-6.6s | %8s | %4s | %8s | %8s | %8s | %8s | %8s | %-18.18s | %-12.12s | %-10.10s|\n",
                    names[i],
+                   hashes[i],
                    size_buf,
                    prog_buf,
                    eta_buf,
@@ -2026,9 +2032,9 @@ int watch_all_torrents(CURL *curl)
                    states[i]);
         }
 
-        printf("+---------------------------------------------------------------------------------------------------------------------------------------------------------------------+\n");
-        printf("<ctrl>+c to quit\n");
-
+        printf("+-------------------------------------+--------+----------+------+----------+----------+----------+----------+----------+--------------------+--------------+-----------+\n");
+        printf("|       Press <Ctrl>+c to quit        |\n");
+        printf("+-------------------------------------+\n");
         cJSON_Delete(root);
         fflush(stdout);
         sleep(2);
@@ -2052,6 +2058,14 @@ int watch_all_torrents(CURL *curl)
          curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 5L);
      }
  }
+
+ static int is_no_auth_mode(void)
+ {
+
+     return (creds.qbt_user[0] == '\0' &&
+     creds.qbt_pass[0] == '\0');
+ }
+
 /* ================= MAIN ================= */
 
 int main(int argc, char **argv)
@@ -2080,6 +2094,7 @@ int main(int argc, char **argv)
     }
 
     /* =========== CHECK AUTH / SET CREDS ============== */
+
     int rc = init_auth(argc, argv);
     if (rc != EXIT_OK) {
         ERR("Authentication initialization failed. ERROR CODE: [%d]",rc);
@@ -2160,11 +2175,13 @@ int main(int argc, char **argv)
     curl_easy_setopt(curl, CURLOPT_COOKIEFILE, "");
     curl_easy_setopt(curl, CURLOPT_COOKIEJAR, "");
 
-    rc = login_qbt(curl);
-    if (rc!= EXIT_OK) {
+    if(!is_no_auth_mode()){
+      rc = login_qbt(curl);
+      if (rc!= EXIT_OK) {
         curl_easy_cleanup(curl);
         curl_global_cleanup();
         return rc;
+      }
     }
 
  /* =============== RESOLVE AND VALIDATE SHORT HASH ============= */

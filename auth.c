@@ -4,7 +4,7 @@
  * Purpose: Handles authentication for qbtctl CLI, including credential initialization,
  *          secure password storage, and integration with the qBittorrent Web API.
  *
- * Version: 1.4.1
+ * Version: 1.4.2
  * Date:    2026-03-11
  *
  * Features:
@@ -31,7 +31,6 @@
 
 #define DEFAULT_AUTH_DIR "/.qbtctl"
 #define DEFAULT_AUTH_FILE "auth.txt"
-#define NO_CREDS_MARKER "__NO_CREDS__"
 
 #ifndef ERR
 #define ERR(fmt, ...) fprintf(stderr,"[ERROR] " fmt "\n",##__VA_ARGS__)
@@ -124,10 +123,9 @@ static int save_auth_file(const char *path)
 
     char hex_cipher[256]={0};
 
-    if(strlen(creds.qbt_pass)>0 &&
-        strcmp(creds.qbt_pass,NO_CREDS_MARKER)!=0){
+    if(strlen(creds.qbt_pass)>0){
 
-        size_t pass_len=strlen(creds.qbt_pass);
+    size_t pass_len=strlen(creds.qbt_pass);
 
     unsigned char nonce[crypto_secretbox_NONCEBYTES]={0};
     unsigned char cipher[128]={0};
@@ -277,12 +275,18 @@ static int load_auth_file(const char *path)
 
 bool can_attempt_login(void)
 {
-    return (
-        creds.qbt_user[0]!=0 &&
-        creds.qbt_pass[0]!=0 &&
-        creds.qbt_url[0]!=0 &&
-        strcmp(creds.qbt_pass,NO_CREDS_MARKER)!=0
-    );
+    if(creds.qbt_url[0] == 0)
+        return false;
+
+    /* no-auth mode allowed */
+    if(creds.qbt_user[0] == 0 && creds.qbt_pass[0] == 0)
+        return true;
+
+    /* normal auth */
+    if(creds.qbt_user[0] != 0)
+        return true;
+
+    return false;
 }
 
 
@@ -348,7 +352,7 @@ int interactive_setup()
     /* Step 3: Username */
     printf("+------------------------------------------+\n");
     printf("| Step 3/6: Enter username                 |\n");
-    printf("| Default: admin                           |\n");
+    printf("|                                          |\n");
     printf("| Type 'quit' then ENTER to cancel         |\n");
     printf("+------------------------------------------+\n");
     printf("Username: ");
@@ -358,8 +362,6 @@ int interactive_setup()
         size_t l=strlen(tmp_user);
         if(l && tmp_user[l-1]=='\n') tmp_user[l-1]=0;
         if(strcmp(tmp_user,"quit")==0) exit(EXIT_BAD_ARGS);
-        if(strlen(tmp_user)==0)
-            safe_strncpy(tmp_user,"admin",sizeof(tmp_user));
     }
 
     /* Step 4: Password */
@@ -371,7 +373,7 @@ int interactive_setup()
 
     printf("+------------------------------------------+\n");
     printf("| Step 4/6: Enter password                 |\n");
-    printf("| Empty password will skip saving          |\n");
+    printf("|                                          |\n");
     printf("| Type 'quit' then ENTER to cancel         |\n");
     printf("+------------------------------------------+\n");
     printf("Password: ");
@@ -393,11 +395,6 @@ int interactive_setup()
     safe_strncpy(creds.qbt_url,tmp_url,sizeof(creds.qbt_url));
     safe_strncpy(creds.qbt_user,tmp_user,sizeof(creds.qbt_user));
     safe_strncpy(creds.qbt_pass,tmp_pass,sizeof(creds.qbt_pass));
-
-    if(strlen(creds.qbt_pass)==0){
-        printf("[Empty password, not saving auth file]\n");
-        exit(EXIT_BAD_ARGS);
-    }
 
     /* Step 5: Save file path */
     char dir[512]={0};
@@ -567,16 +564,19 @@ int init_auth(int argc, char **argv)
 
     /* CLI override */
 
-    if(cli_user[0])
+    if(cli_user[0]){
         safe_strncpy(creds.qbt_user,cli_user,sizeof(creds.qbt_user));
-
-    if(cli_pass[0])
+        loaded = 0;
+    }
+    if(cli_pass[0]){
         safe_strncpy(creds.qbt_pass,cli_pass,sizeof(creds.qbt_pass));
-
-    if(cli_url[0])
+        loaded = 0;
+    }
+    if(cli_url[0]){
         safe_strncpy(creds.qbt_url,cli_url,sizeof(creds.qbt_url));
-
-    if(!can_attempt_login()){
+        loaded = 0;
+    }
+     if(!can_attempt_login()){
         printf("[No credentials supplied]\n");
         exit(EXIT_FILE);
     }
