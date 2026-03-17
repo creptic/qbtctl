@@ -5,7 +5,7 @@
  *          secure password storage, and integration with the qBittorrent Web API.
  *
  * Version: 1.4.2
- * Date:    2026-03-11
+ * Date:    2026-03-17
  *
  * Features:
  *   - Initialize authentication from command-line arguments or stored credentials
