@@ -98,8 +98,8 @@ You will be prompted for:
 
 - qBittorrent URL (default: `http://localhost`)
 - Port (default: 8080)
-- Username (default: admin)
-- Password (cannot be empty)
+- Username
+- Password
 
 Note: To save to program directory just type ```auth.txt``` or alternate filename, when saving in -i or --setup
 
