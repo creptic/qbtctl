@@ -9,7 +9,7 @@
 
 It allows you to manage torrents directly from the terminal, supporting operations such as:
 
-- Pausing, resuming, stopping, and removing torrents  
+- Adding, resuming, stopping, and removing torrents  
 - Setting categories, tags, sequential download, and superseeding 
 - Monitoring torrent upload/download limits, state, and seed time  
 - Interactive authentication setup or command-line credentials  
