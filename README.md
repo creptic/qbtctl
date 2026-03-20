@@ -134,14 +134,17 @@ These examples assume you have already set up credentials with `./qbtctl --setup
 ```
 Active torrents: 3 | Total DL: 28.6M | Total UL: 1.4M
 
-Name                                Size      Progress        ETA        DL        UL     Downloaded     Uploaded Tags               Category        State
-+------------------------------------------------------------------------------------------------------------------------------------------------------------+
-ubuntu-24.04-desktop-amd64.iso      4.7G      63%        00:18:42     18.3M     210K       2.98G        55.1M   Linux, ISO         linux           downloading
-archlinux-2026.03.01-x86_64.iso     1.1G      92%        00:02:11      8.6M     430K       1.02G        89.4M   Linux, ISO         linux           downloading
-debian-12.10.0-amd64-netinst.iso    647M      100%       00:00:00       0B       0B       647.2M       312.7M   Linux, ISO         linux           stalledUP
-fedora-workstation-live-x86_64.iso  2.2G      100%       00:00:00       0B     812K        2.2G         1.48G   Linux, ISO         linux           uploading
-linuxmint-22-cinnamon-64bit.iso     2.8G      37%        00:42:15      1.7M      0B        1.04G        12.4M   Linux, ISO         linux           downloading
-+------------------------------------------------------------------------------------------------------------------------------------------------------------+
++-------------------------------------+--------+----------+------+----------+----------+----------+----------+----------+--------------------+--------------+-----------+
+|  Name                               | Hash   |     Size | Prog |      ETA |       DL |       UL | Download |   Upload | Tags               | Category     | State     |
++-------------------------------------+--------+----------+------+----------+----------+----------+----------+----------+--------------------+--------------+-----------+
+| ubuntu-24.04-desktop-amd64.iso      | 969bd1 |    4.76G |  63% | 00:18:42 |       0B |       0B |    2.76G |    55.1M | Linux, ISO         | linux        | stalledUP |
+| archlinux-2026.03.01-x86_64.iso     | 393166 |  895.39M |  92% | 00:02:11 |       0B |       0B |  395.69M |    89.4M | Linux, ISO         | linux        | stalledUP |
+| debian-12.10.0-amd64-netinst.iso    | 8d8a89 |    1.06G | 100% | 00:00:00 |       0B |       0B |    1.06G |   312.7M | Linux, ISO         | linux        | stalledUP |
+| linuxmint-22-cinnamon-64bit.iso     | 70fa97 |    2.92G |  37% | 00:42:15 |       0B |       0B |    1.92G |    12.4M | Linux, ISO         | linux        | stalledUP |
++-------------------------------------+--------+----------+------+----------+----------+----------+----------+----------+--------------------+--------------+-----------+
+|       Press <Ctrl>+c to quit        |
++-------------------------------------+
+
 ```
 
 ## 2. Show all torrents
