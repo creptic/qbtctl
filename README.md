@@ -5,7 +5,7 @@
 
 ---
 
-**qbtctl** is a minimal, ultra-fast command-line interface for controlling qBittorrent via its Web API.
+**qbittorrent torrent control** is a minimal, ultra-fast command-line interface for controlling a torrent in qBittorrent via its Web API.
 
 It allows you to manage torrents directly from the terminal, supporting operations such as:
 
@@ -150,8 +150,6 @@ linuxmint-22-cinnamon-64bit.iso     2.8G      37%        00:42:15      1.7M     
 ./qbtctl -a
 ```
 
-
-
 ```text
 
 +------------------------------------------+--------+--------------+--------------+--------------+--------------+--------------+----------+------------------+
@@ -272,7 +270,7 @@ Remove torrent (keep data):
 Delete torrent and data:
 
 ```bash
-./qbtctl -ad -h 9c3289
+./qbtctl -del -h 9c3289
 ```
 
 ---
@@ -297,27 +295,10 @@ If you want to run commands directly with credentials:
 
 ---
 
-## 8. Docker One-Liner (Static Build & Run)
-
+## 8. Add a torrent file, set category to iso and show name)
+- Note: magnet link works same as file use "magnet:?xt=****"
 ```bash
-docker run --rm -v $(pwd):/out alpine:latest /bin/sh -c "
-apk add --no-cache build-base musl-dev zlib-static pkgconf wget tar libsodium-dev libsodium-static &&
-cd /tmp &&
-wget https://curl.se/download/curl-8.17.0.tar.gz &&
-tar xzf curl-8.17.0.tar.gz &&
-cd curl-8.17.0 &&
-./configure --disable-shared --enable-static --without-ssl --disable-ntlm --disable-ldap --disable-ldaps \
-            --disable-ftp --disable-file --disable-dict --disable-telnet --disable-pop3 --disable-imap \
-            --disable-smtp --disable-gopher --disable-manual --disable-psl --without-libpsl &&
-make -j$(nproc) &&
-cd /out &&
-gcc -O2 -static -s \
--I/tmp/curl-8.17.0/include \
--L/tmp/curl-8.17.0/lib/.libs \
--o qbtctl *.c \
--lcurl -lsodium -lz -lm -ldl -lpthread &&
-./qbtctl --setup
-"
+./qbtctl --add torrent.file --set-category "ISO" -gn
 ```
 
 # Options
@@ -350,7 +331,8 @@ gcc -O2 -static -s \
 -af, --force-start         Force start torrent
 -ap, --pause               Pause or stop torrent
 -ar, --remove              Stop and remove torrent (keeps data)
--ad, --delete              Stop, remove, and delete torrent and data
+-del, --delete             Stop, remove, and delete torrent and data
+-add <file/magnet>, --add <file/magnet> Add torrent via file or magnet link
 ```
 
 ---
@@ -396,6 +378,7 @@ gcc -O2 -static -s \
 -ge, --get-eta              100:00:00 (100:00:00=inf.)   8640000
 -gst, --get-status          ForcedUP                     "ForcedUP"
 -gpr, --get-progress        100%                         1.000000
+-ghl, --get-hash-list       9c3289,012345                9c3289000000000etc,012345678*
 ```
 ---
 ## ⚠ Exit / Error Codes
