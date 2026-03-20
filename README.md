@@ -307,7 +307,7 @@ If you want to run commands directly with credentials:
 # Options
 
 ```bash
--help, --help                   Show help message
+-help, --help            Show help message
 -i, --setup              Setup server credentials interactively
 -w, --watch              Watch all torrent stats in real time
 -c <path>                Alternate auth file path
