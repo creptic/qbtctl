@@ -5,7 +5,7 @@
  *          via its Web API. Includes live torrent monitoring, sorting, and torrent info display.
  *
  * Version: 1.4.2
- * Date:    2026-03-11
+ * Date:    2026-03-17
  *
  * Features:
  *   - Set/Get a torrent settings in real time
@@ -39,6 +39,7 @@ void show_help(void);
 #define QBTCTL_VERSION "1.4.1"
 #define MAX_JSON 1048576
 #define HASH_WIDTH 40
+#define QBT_MAX_HASHES 1024
 
 /* ================= EXIT CODES ================= */
 
@@ -50,7 +51,6 @@ void show_help(void);
 #define EXIT_FILE           5
 #define EXIT_ACTION_FAIL    6
 #define ERR(fmt, ...) fprintf(stderr, "[ERROR] " fmt "\n", ##__VA_ARGS__)
-
 
 int show_all_clean = 0;
 int show_json = 0;
@@ -461,14 +461,22 @@ int populate_torrent_info_struct(CURL *curl)
 /* ================= ENSURE SINGLE LOADED ================= */
 static int ensure_single_loaded(CURL *curl, int *single_loaded)
 {
-    if (!*single_loaded) {
-        if (!populate_torrent_info_struct(curl)) {
-            ERR("Failed to populate torrent info in ensure_single_loaded");
-            exit (EXIT_FETCH_FAIL);
+    if (*single_loaded) return 1;
+
+    int retries = 20;          // ~4 seconds total
+    int delay_us = 200000;     // 200ms
+
+    while (retries-- > 0) {
+
+        if (populate_torrent_info_struct(curl)) {
+            *single_loaded = 1;
+            return 1;
         }
-        *single_loaded = 1;
+        usleep(delay_us);
     }
-    return 1;
+
+    ERR("Failed to populate torrent info after waiting");
+    return 0;
 }
 
 /* ================= GETTERS ================= */
@@ -500,6 +508,64 @@ void fmt_bytes(char *buf, size_t sz, long long bytes)
         snprintf(buf,sz,"%.2fK", bytes / 1024.0);
     else
         snprintf(buf,sz,"%lldB", bytes);
+}
+/* ================= HASH CSV ================= */
+
+char *get_hashes_csv(CURL *curl)
+{
+    if(!curl) return NULL;
+
+    char url[512];
+    snprintf(url,sizeof(url),"%s/api/v2/torrents/info",creds.qbt_url);
+
+    char *json = qbt_get_json(curl,url);
+    if(!json) return NULL;
+
+    cJSON *root = cJSON_Parse(json);
+    free(json);
+
+    if(!root || !cJSON_IsArray(root)){
+        if(root) cJSON_Delete(root);
+        return NULL;
+    }
+
+    int count = cJSON_GetArraySize(root);
+
+    size_t buf_size = count * 64 + 1;
+    char *out = malloc(buf_size);
+
+    if(!out){
+        cJSON_Delete(root);
+        return NULL;
+    }
+
+    out[0] = '\0';
+
+    for(int i=0;i<count;i++)
+    {
+        cJSON *obj = cJSON_GetArrayItem(root,i);
+        cJSON *item = cJSON_GetObjectItem(obj,"hash");
+
+        if(cJSON_IsString(item))
+        {
+            char tmp[64];
+
+            if(raw == 0){
+                snprintf(tmp,sizeof(tmp),"%.6s", item->valuestring);
+            } else {
+                snprintf(tmp,sizeof(tmp),"%s", item->valuestring);
+            }
+
+            strcat(out, tmp);
+
+            if(i < count-1){
+                strcat(out, ",");
+            }
+        }
+    }
+
+    cJSON_Delete(root);
+    return out;
 }
 
 char *get_private()  { return format_bool(torrent.is_private); }
@@ -828,13 +894,13 @@ int get_tracker_list(CURL *curl)
 
         const char *tracker = url_item->valuestring;
 
-        /* Skip internal trackers */
+        /* Skip internal trackers
         if (strcmp(tracker, "** [DHT] **") == 0)
             continue;
         if (strcmp(tracker, "** [PeX] **") == 0)
             continue;
         if (strcmp(tracker, "** [LSD] **") == 0)
-            continue;
+            continue;  */
 
         /* ---------------- RAW MODE ---------------- */
         if (raw==1) {
@@ -1830,21 +1896,204 @@ int move_torrent(CURL *curl, const char *path)
     return rc;
 }
 
-int stop_and_remove_torrent(CURL *curl, bool delete_files)
+static int stop_and_remove_torrent(CURL *curl, bool delete_files)
 {
-    if (!pause_torrent(curl))
-        return EXIT_ACTION_FAIL; /* Try to stop torrent first */
+    if (!curl || !creds.qbt_hash[0]) {
+        ERR("stop_and_remove_torrent: invalid arguments");
+        return EXIT_BAD_ARGS;
+    }
 
-    int rc={0};
+    // Resolve short hash if needed
+    if (strlen(creds.qbt_hash) < 40) {
+        if (!resolve_and_validate_hash(curl, creds.qbt_hash)) {
+            ERR("Failed to resolve hash '%s'", creds.qbt_hash);
+            return EXIT_BAD_ARGS;
+        }
+    }
+    int rc = 0;
     if (delete_files) {
         rc = qbt_action(curl, "/api/v2/torrents/delete", "deleteFiles=true");
-        return rc;
+        if (rc != EXIT_OK) {
+            ERR("Failed to delete torrent %s with files", creds.qbt_hash);
+            return rc;
+        }
+    } else {
+        rc = qbt_action(curl, "/api/v2/torrents/delete", "deleteFiles=false");
+        if (rc != EXIT_OK) {
+            ERR("Failed to remove torrent %s (files retained)", creds.qbt_hash);
+            return rc;
+        }
     }
-    rc = qbt_action(curl, "/api/v2/torrents/delete", "deleteFiles=false");
-    return rc;
+
+    return EXIT_OK;
 }
 
+// Add a .torrent file using an existing CURL handle
 
+static int add_torrent(CURL *curl, const char *input)
+{
+    if (!curl || !input || !input[0]) {
+        ERR("add_torrent: invalid arguments");
+        return EXIT_BAD_ARGS;
+    }
+
+    int is_magnet = (strncmp(input, "magnet:", 7) == 0);
+
+    /* store old hashes */
+    char old_hashes[QBT_MAX_HASHES][7];
+    int old_count = 0;
+
+    long long max_added_before = 0;
+
+    /* single pass baseline */
+    {
+        char url[512];
+        snprintf(url, sizeof(url), "%s/api/v2/torrents/info", creds.qbt_url);
+
+        char *json = qbt_get_json(curl, url);
+        if (json) {
+            cJSON *root = cJSON_Parse(json);
+            free(json);
+
+            if (root && cJSON_IsArray(root)) {
+                int count = cJSON_GetArraySize(root);
+
+                for (int i = 0; i < count && old_count < QBT_MAX_HASHES; i++) {
+                    cJSON *obj = cJSON_GetArrayItem(root, i);
+
+                    cJSON *h = cJSON_GetObjectItem(obj, "hash");
+                    cJSON *a = cJSON_GetObjectItem(obj, "added_on");
+
+                    if (cJSON_IsString(h) && h->valuestring) {
+                        snprintf(old_hashes[old_count], 7, "%.6s", h->valuestring);
+                        old_count++;
+                    }
+
+                    if (cJSON_IsNumber(a)) {
+                        long long val = (long long)a->valuedouble;
+                        if (val > max_added_before)
+                            max_added_before = val;
+                    }
+                }
+            }
+
+            if (root) cJSON_Delete(root);
+        }
+    }
+
+    /* file check */
+    if (!is_magnet) {
+        FILE *f = fopen(input, "rb");
+        if (!f) {
+            ERR("File not found: %s", input);
+            return EXIT_BAD_ARGS;
+        }
+        fclose(f);
+    }
+
+    /* curl setup */
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, discard_cb);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, NULL);
+
+    char url[512];
+    snprintf(url, sizeof(url), "%s/api/v2/torrents/add", creds.qbt_url);
+    curl_easy_setopt(curl, CURLOPT_URL, url);
+
+    curl_mime *mime = curl_mime_init(curl);
+    if (!mime) return EXIT_ACTION_FAIL;
+
+    curl_mimepart *part = curl_mime_addpart(mime);
+
+    if (is_magnet) {
+        curl_mime_name(part, "urls");
+        curl_mime_data(part, input, CURL_ZERO_TERMINATED);
+    } else {
+        curl_mime_name(part, "torrents");
+        curl_mime_filedata(part, input);
+    }
+
+    curl_easy_setopt(curl, CURLOPT_MIMEPOST, mime);
+
+    CURLcode res = curl_easy_perform(curl);
+    curl_mime_free(mime);
+
+    if (res != CURLE_OK) {
+        ERR("add_torrent: curl_easy_perform() failed: %s",
+            curl_easy_strerror(res));
+        return EXIT_ACTION_FAIL;
+    }
+
+    /* detection loop */
+    int retries = 20;
+    int delay_us = 300000;
+
+    while (retries-- > 0) {
+
+        char url2[512];
+        snprintf(url2, sizeof(url2), "%s/api/v2/torrents/info", creds.qbt_url);
+
+        char *json = qbt_get_json(curl, url2);
+        if (!json) {
+            usleep(delay_us);
+            continue;
+        }
+
+        cJSON *root = cJSON_Parse(json);
+        free(json);
+
+        if (!root || !cJSON_IsArray(root)) {
+            if (root) cJSON_Delete(root);
+            usleep(delay_us);
+            continue;
+        }
+
+        int count = cJSON_GetArraySize(root);
+
+        for (int i = 0; i < count; i++) {
+            cJSON *obj = cJSON_GetArrayItem(root, i);
+
+            cJSON *h = cJSON_GetObjectItem(obj, "hash");
+            cJSON *a = cJSON_GetObjectItem(obj, "added_on");
+
+            if (!cJSON_IsString(h) || !h->valuestring)
+                continue;
+
+            char short_hash[7];
+            snprintf(short_hash, sizeof(short_hash), "%.6s", h->valuestring);
+
+            /* fast lookup */
+            int found = 0;
+            for (int j = 0; j < old_count; j++) {
+                if (strncmp(short_hash, old_hashes[j], 6) == 0) {
+                    found = 1;
+                    break;
+                }
+            }
+
+            if (!found) {
+                safe_copy(creds.qbt_hash, sizeof(creds.qbt_hash), short_hash);
+                cJSON_Delete(root);
+                return EXIT_OK;
+            }
+
+            /* fallback */
+            if (cJSON_IsNumber(a)) {
+                long long val = (long long)a->valuedouble;
+                if (val > max_added_before) {
+                    safe_copy(creds.qbt_hash, sizeof(creds.qbt_hash), short_hash);
+                    cJSON_Delete(root);
+                    return EXIT_OK;
+                }
+            }
+        }
+
+        cJSON_Delete(root);
+        usleep(delay_us);
+    }
+
+    ERR("Could not detect new torrent");
+    return EXIT_FETCH_FAIL;
+}
 /* !================ Live Watch ================! */
 
 // helper to format ETA as DD:HH:MM
@@ -2104,12 +2353,15 @@ int main(int argc, char **argv)
     bool did_action = false;
     bool need_single_hash = false;
     int single_loaded = 0;
+    bool use_add_hash = false;
 
     /* ================= PARSE CLI ================= */
     for (int i = 1; i < argc; i++) {
 
         if (strcmp(argv[i], "-r") == 0 || strcmp(argv[i], "--raw") == 0)
             raw = 1;
+        if (strcmp(argv[i], "-add") == 0 || strcmp(argv[i], "--add") == 0)
+            use_add_hash=true;
 
         if ((strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--hash") == 0) && i + 1 < argc)
             safe_copy(creds.qbt_hash, sizeof(creds.qbt_hash), argv[++i]);
@@ -2158,7 +2410,8 @@ int main(int argc, char **argv)
             strcmp(argv[i], "-af") == 0 || strcmp(argv[i], "--force-start") == 0 ||
             strcmp(argv[i], "-ap") == 0 || strcmp(argv[i], "--pause") == 0 ||
             strcmp(argv[i], "-ar") == 0 || strcmp(argv[i], "--remove") == 0 ||
-            strcmp(argv[i], "-ad") == 0 || strcmp(argv[i], "--delete") == 0)
+
+            strcmp(argv[i], "-del") == 0 || strcmp(argv[i], "--delete") == 0)
         {
             need_single_hash = true;
         }
@@ -2183,9 +2436,9 @@ int main(int argc, char **argv)
         return rc;
       }
     }
-
  /* =============== RESOLVE AND VALIDATE SHORT HASH ============= */
-    if (need_single_hash) {
+    if ((need_single_hash) && !use_add_hash) {
+
         if (strlen(creds.qbt_hash) == 0) {
             fprintf(stderr, "Hash required for this operation\n");
             curl_easy_cleanup(curl);
@@ -2222,6 +2475,19 @@ int main(int argc, char **argv)
             }
             show_all_clean = 0;
             did_action = true;
+        } else if ((strcmp(arg, "-add") == 0 || strcmp(arg, "--add") == 0) && i + 1 < argc)  {
+            rc = add_torrent(curl,argv[++i]);
+            if (rc != EXIT_OK) {
+                curl_easy_cleanup(curl);
+                curl_global_cleanup();
+                return rc;
+            }
+            if (!resolve_and_validate_hash(curl, creds.qbt_hash)) {
+                ERR("Failed to resolve full hash after add");
+                return EXIT_FETCH_FAIL;
+            }
+            ensure_single_loaded(curl, &single_loaded);
+            did_action = true;
         } else if ((strcmp(arg, "-aj") == 0 || strcmp(arg, "--show-all-json") == 0)) {
             rc = show_all_torrents_info_json(curl);
             if (rc != EXIT_OK) {
@@ -2241,6 +2507,16 @@ int main(int argc, char **argv)
                 continue;
             }
             show_json = 0;
+            did_action = true;
+        } else if ((strcmp(arg, "-ghl") == 0 || strcmp(arg, "--get-hash-list") == 0)) {
+            char *csv = get_hashes_csv(curl);
+            if(csv){
+                printf("%s\n", csv);
+                free(csv);
+            }
+            else{
+                ERR("No torrent hashes found\n");
+            }
             did_action = true;
         } else if ((strcmp(arg, "-gtl") == 0 || strcmp(arg, "--get-tracker-list") == 0) && ensure_single_loaded(curl, &single_loaded)) {
             if (!get_tracker_list(curl))
@@ -2428,7 +2704,7 @@ int main(int argc, char **argv)
                     return rc;
             }
             did_action = true;
-        } else if ((strcmp(arg, "-ad") == 0 || strcmp(arg, "--delete") == 0)) {
+        } else if ((strcmp(arg, "-del") == 0 || strcmp(arg, "--delete") == 0)) {
             rc = stop_and_remove_torrent(curl, true);
             if (rc != EXIT_OK) {
                 curl_easy_cleanup(curl);
