@@ -44,13 +44,13 @@ void show_help()
     printf("  -sj, --show-single-json   Show single torrent info as json (requires hash)\n");
     printf("  -v, --version        Show version and exit\n");
     printf("**Actions (requires hash) (per torrent)\n");
-    printf("  -add, --add         Add a torrent, or magnet. Other setters/getters can be used\n");
     printf("  -am <path>, --move <path> Move torrent to <path on server> (use with caution)\n");
     printf("  -as, --start         Start torrent\n");
     printf("  -af, --force-start   Force start torrent\n");
     printf("  -ap, --pause         Pause/Stop torrent\n");
     printf("  -ar, --remove        Stop  and remove torrent (do not delete)\n");
     printf("  -del, --delete       Stop, remove and DELETE torrent (*use with caution*)\n");
+    printf("  -add, --add         Add a torrent, or magnet. Other setters/getters can be used\n");
     printf("**Setters (requires hash) (per torrent)\n");
     printf("  -sc <cat>, --set-category <cat> Set category\n");
     printf("  -st <tag>, --set-tags <tag>     Set tags (CSV, null to clear) (sorted alpha) \n");
