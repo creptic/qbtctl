@@ -5,8 +5,8 @@
  *          Handles printing command lists, flags, examples, and detailed
  *          instructions for users.
  *
- * Version: 1.4.2
- * Date:    2026-03-17
+ * Version: 1.4.7
+ * Date:    2026-03-20
  *
  * Features:
  *   - Displays full help for all commands and options
@@ -44,12 +44,13 @@ void show_help()
     printf("  -sj, --show-single-json   Show single torrent info as json (requires hash)\n");
     printf("  -v, --version        Show version and exit\n");
     printf("**Actions (requires hash) (per torrent)\n");
+    printf("  -add, --add         Add a torrent, or magnet. Other setters/getters can be used\n");
     printf("  -am <path>, --move <path> Move torrent to <path on server> (use with caution)\n");
     printf("  -as, --start         Start torrent\n");
     printf("  -af, --force-start   Force start torrent\n");
     printf("  -ap, --pause         Pause/Stop torrent\n");
     printf("  -ar, --remove        Stop  and remove torrent (do not delete)\n");
-    printf("  -ad, --delete        Stop, remove and DELETE torrent (*use with caution*)\n");
+    printf("  -del, --delete       Stop, remove and DELETE torrent (*use with caution*)\n");
     printf("**Setters (requires hash) (per torrent)\n");
     printf("  -sc <cat>, --set-category <cat> Set category\n");
     printf("  -st <tag>, --set-tags <tag>     Set tags (CSV, null to clear) (sorted alpha) \n");
@@ -85,6 +86,7 @@ void show_help()
     printf("  -ge, --get-eta       Get ETA of torrent (100:00:00 = infinite)\n");
     printf("  -gst, --get-state    Get torrent state (raw=true/false)\n");
     printf("  -gpr, --get-progress Get progress of a torrent (raw=0-100)\n");
+    printf("  -ghl, --get-hash-list Get list of current hashes as csv (raw=40 character hash)\n");
     printf("**Examples:\n");
     printf("  qbtctl --hash 198380 -gn\n");
     printf("  qbtctl --show-all\n");
