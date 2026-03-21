@@ -43,17 +43,18 @@ Before compiling `qbtctl`, ensure your system has:
 - **C compiler** (`cc`, `gcc`, or `clang`)
 - **libcurl** (for connecting to qbittorent api)
 - **libsodium** (for encrypting/decrypting password) 
+- **mbedtls** (for https support)
 - POSIX-compatible OS (Linux, macOS, etc.)
 
 A Makefile is included.
 
-Compile with:
+Compile:
 
 ```bash
 make
 ```
 
-For a portable [**static build**](#static-build-using-docker), see the Docker section below.
+For a portable build use `make static=1` or see the Docker section below. [**static build**](#static-build-using-docker), 
 
 ---
 
