@@ -449,9 +449,6 @@ gcc -O2 -static -s \
     -o qbtctl *.c \
     -lcurl -lsodium -lz -lmbedtls -lmbedx509 -lmbedcrypto -lm -ldl -lpthread
 
-# Strip all symbols to minimize size
-strip --strip-all qbtctl
-
 # Set host UID/GID ownership
 chown \$HOST_UID:\$HOST_GID qbtctl
 "
