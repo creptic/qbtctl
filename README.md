@@ -462,7 +462,6 @@ If you enjoy **qbtctl**, consider buying me a coffee
 
 ---
 # Notes
-- Not tested with SSL (https://), I added some code but needs testing.
 - Special thank you to the cJSON drop in from https://github.com/DaveGamble/cJSON
 
 ---
