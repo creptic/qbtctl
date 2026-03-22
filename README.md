@@ -29,10 +29,18 @@ https://github.com/creptic/qbtctl/releases/latest/download/qbtctl
 
 ---
 
+## Example 
+Pause all torrents and set sequential download to 1 (ON)
+```bash
+for h in $(qbtctl -ghl); do
+    qbtctl -h $h --pause --set-seqdl 1
+done
+```
+---
+
 💡 **Quick Reference / Cheat Sheet**
 
 Most common commands and flags are listed in the [**Options**](#options) section below.  
-Refer there for full details and all available flags.
 
 ---
 
