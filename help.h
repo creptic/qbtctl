@@ -5,8 +5,8 @@
  *          Provides command-line guidance, usage examples, and
  *          argument parsing assistance for users.
  *
- * Version: 1.4.7
- * Date:    2026-03-20
+ * Version: 1.4.9
+ * Date:    2026-03-22
  *
  * Features:
  *   - Declares functions to display help messages

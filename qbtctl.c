@@ -4,8 +4,8 @@
  * Purpose: Minimal, ultra-fast command-line interface for monitoring and controlling qBittorrent
  *          via its Web API. Includes live torrent monitoring, sorting, and torrent info display.
  *
- * Version: 1.4.7
- * Date:    2026-03-20
+ * Version: 1.4.9
+ * Date:    2026-03-22
  *
  * Features:
  *   - Set/Get a torrent settings in real time
@@ -36,7 +36,7 @@
 
 void show_help(void);
 
-#define QBTCTL_VERSION "1.4.7"
+#define QBTCTL_VERSION "1.4.9"
 #define MAX_JSON 1048576
 #define HASH_WIDTH 40
 #define QBT_MAX_HASHES 1024
@@ -137,42 +137,154 @@ static size_t discard_cb(void *ptr, size_t size, size_t nmemb, void *userdata)
 
     return size * nmemb;
 }
+static void configure_https_if_needed(CURL *curl)
+{
+    if (!curl || creds.qbt_url[0] == '\0') return;
+
+    if (strncmp(creds.qbt_url, "https://", 8) == 0) {
+        /* Enable strict SSL verification */
+        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
+        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
+        curl_easy_setopt(curl, CURLOPT_USE_SSL, CURLUSESSL_ALL);
+
+        /* Optional timeouts */
+        curl_easy_setopt(curl, CURLOPT_TIMEOUT, 15L);
+        curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 5L);
+
+        /* Use insecure mode if set */
+        if (creds.qbt_insecure) {
+            printf("[INFO] Using insecure HTTPS: certificate verification disabled\n");
+            curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
+            curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
+        }
+
+        /* Custom CA certificate if provided */
+        if (creds.qbt_cert[0] != '\0') {
+            curl_easy_setopt(curl, CURLOPT_CAINFO, creds.qbt_cert);
+        }
+    }
+}
+
+
+static int qbt_request(CURL *curl, const char *endpoint,
+                       const char *postfields, struct memory *resp)
+{
+    if (!curl || !endpoint || creds.qbt_url[0] == '\0')
+        return 0;
+
+    char url[512];
+    snprintf(url, sizeof(url), "%s%s", creds.qbt_url, endpoint);
+
+    curl_easy_setopt(curl, CURLOPT_URL, url);
+
+    /* POST vs GET */
+    if (postfields) {
+        curl_easy_setopt(curl, CURLOPT_POST, 1L);
+        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, postfields);
+    } else {
+        curl_easy_setopt(curl, CURLOPT_HTTPGET, 1L);
+        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, NULL);
+    }
+
+    /* Response handling (optional) */
+    if (resp) {
+        if (!resp->data) {
+            resp->data = calloc(1, MAX_JSON);
+            if (!resp->data) {
+                ERR("Failed to allocate response buffer");
+                return 0;
+            }
+        }
+        resp->size = 0;
+
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_cb);
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, resp);
+    } else {
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, NULL);
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, NULL);
+    }
+
+    /* HTTPS / SSL config */
+    configure_https_if_needed(curl);
+
+    CURLcode res = curl_easy_perform(curl);
+
+    /* Retry with insecure if enabled */
+    if ((res == CURLE_PEER_FAILED_VERIFICATION ||
+        res == CURLE_SSL_CACERT) &&
+        creds.qbt_insecure)
+    {
+        printf("[INFO] SSL verification failed, retrying insecure...\n");
+        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
+        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
+        res = curl_easy_perform(curl);
+    }
+
+    if (res != CURLE_OK) {
+        ERR("Request failed: %s", curl_easy_strerror(res));
+        if (resp && resp->data) {
+            free(resp->data);
+            resp->data = NULL;
+        }
+        return 0;
+    }
+
+    long status = 0;
+    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &status);
+    if (status >= 400) {
+        ERR("HTTP error: %ld", status);
+        if (resp && resp->data) {
+            free(resp->data);
+            resp->data = NULL;
+        }
+        return 0;
+    }
+
+    return 1;
+}
 
 /* ================= LOGIN ================= */
 static int login_qbt(CURL *curl)
 {
     if (!curl) return EXIT_LOGIN_FAIL;
 
-    char url[512];
     char post[256];
+    snprintf(post, sizeof(post), "username=%s&password=%s",
+             creds.qbt_user, creds.qbt_pass);
 
-    snprintf(url, sizeof(url), "%s/api/v2/auth/login", creds.qbt_url);
-    snprintf(post, sizeof(post), "username=%s&password=%s", creds.qbt_user, creds.qbt_pass);
+    /* Use your write_cb with a small memory buffer */
+    struct memory resp;
+    resp.data = calloc(1, 64);   // enough to store "Ok." response
+    if (!resp.data) {
+        ERR("Failed to allocate memory for login response");
+        return EXIT_LOGIN_FAIL;
+    }
+    resp.size = 0;
 
-    curl_easy_setopt(curl, CURLOPT_URL, url);
-    curl_easy_setopt(curl, CURLOPT_POST, 1L);
-    curl_easy_setopt(curl, CURLOPT_POSTFIELDS, post);
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, discard_cb);
-    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 15L);
-    curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 5L);
-    curl_easy_setopt(curl, CURLOPT_COOKIEFILE, "");
-    curl_easy_setopt(curl, CURLOPT_COOKIEJAR, "");
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_cb);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &resp);
 
-    CURLcode res = curl_easy_perform(curl);
-    if (res != CURLE_OK) {
-        ERR("CURL error on login: %s", curl_easy_strerror(res));
+    /* Send login request */
+    if (!qbt_request(curl, "/api/v2/auth/login", post, &resp)) {
+        ERR("Login request failed");
+        free(resp.data);
         return EXIT_LOGIN_FAIL;
     }
 
-    long status = 0;
-    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &status);
-    if (status != 200) {
-        ERR("Login failed, HTTP status: %ld", status);
+    /* Verify server returned "Ok." */
+    if (strncmp(resp.data, "Ok.", 3) != 0) {
+        ERR("Login failed: invalid credentials");
+        free(resp.data);
         return EXIT_LOGIN_FAIL;
     }
 
+    free(resp.data);
+
+    /* Reset curl to GET for subsequent requests */
     curl_easy_setopt(curl, CURLOPT_POST, 0L);
     curl_easy_setopt(curl, CURLOPT_HTTPGET, 1L);
+    curl_easy_setopt(curl, CURLOPT_POSTFIELDS, NULL);
+
 
     return EXIT_OK;
 }
@@ -1176,74 +1288,6 @@ int show_all_torrents_info(CURL *curl)
 
 /* !================ SETTERS ================! */
 
-/* request helper */
-bool qbt_request(CURL *curl,
-                 const char *endpoint,
-                 const char *postfields,
-                 struct memory *out_mem)
-{
-    if (!curl || !endpoint) {
-        fprintf(stderr, "[ERROR] Invalid arguments to qbt_request\n");
-        return false;
-    }
-    char url[512];
-    snprintf(url, sizeof(url), "%s%s", creds.qbt_url, endpoint);
-
-    int attempt = 0;
-    retry_request:
-
-    /* Clean state */
-    curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, NULL);
-    curl_easy_setopt(curl, CURLOPT_HTTPGET, 0L);
-    curl_easy_setopt(curl, CURLOPT_POST, 0L);
-    curl_easy_setopt(curl, CURLOPT_POSTFIELDS, NULL);
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, NULL);
-
-    curl_easy_setopt(curl, CURLOPT_URL, url);
-    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 15L);
-    curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 5L);
-
-    if (postfields) {
-        curl_easy_setopt(curl, CURLOPT_POST, 1L);
-        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, postfields);
-    } else {
-        curl_easy_setopt(curl, CURLOPT_HTTPGET, 1L);
-    }
-    if (out_mem) {
-        out_mem->size = 0;
-        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_cb);
-        curl_easy_setopt(curl, CURLOPT_WRITEDATA, out_mem);
-    } else {
-        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, discard_cb);
-    }
-    CURLcode res = curl_easy_perform(curl);
-
-    if (res != CURLE_OK) {
-        fprintf(stderr, "[ERROR] CURL failed: %s\n",
-                curl_easy_strerror(res));
-        return false;
-    }
-    long http_code = 0;
-    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
-
-    /* AUTO RELOGIN LOGIC */
-    if (http_code == 403 && attempt == 0) {
-        attempt++;
-
-        fprintf(stderr, "[INFO] Session expired. Re-authenticating...\n");
-
-        if (!login_qbt(curl)) {
-            fprintf(stderr, "[ERROR] Re-login failed\n");
-            return false;
-        }
-        goto retry_request;
-    }
-    if (http_code < 200 || http_code >= 300) {
-        fprintf(stderr, "[ERROR] HTTP error: %ld\n", http_code);
-        return false;
-    }
-    return true;
-}
 /* ================= SETTER HELPERS ================= */
 
 
@@ -2292,21 +2336,6 @@ int watch_all_torrents(CURL *curl)
     return 1;
 }
 /* ================= OPTIONAL HTTPS (todo)SUPPORT ================= */
- static void configure_https_if_needed(CURL *curl)
- {
-     if (!curl)
-         return;
-     if (strncmp(creds.qbt_url, "https://", 8) == 0) {
-         /* Enable strict SSL verification */
-         curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
-         curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
-         /* Optional: safer defaults */
-         curl_easy_setopt(curl, CURLOPT_USE_SSL, CURLUSESSL_ALL);
-         /* Optional timeouts (hardening) */
-         curl_easy_setopt(curl, CURLOPT_TIMEOUT, 15L);
-         curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 5L);
-     }
- }
 
  static int is_no_auth_mode(void)
  {

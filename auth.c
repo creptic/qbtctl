@@ -4,8 +4,8 @@
  * Purpose: Handles authentication for qbtctl CLI, including credential initialization,
  *          secure password storage, and integration with the qBittorrent Web API.
  *
- * Version: 1.4.7
- * Date:    2026-03-20
+ * Version: 1.4.9
+ * Date:    2026-03-22
  *
  * Features:
  *   - Initialize authentication from command-line arguments or stored credentials
@@ -475,8 +475,10 @@ int init_auth(int argc, char **argv)
     char cli_pass[64]={0};
     char cli_url[256]={0};
 
-    char *config_path=NULL;
 
+
+    char *config_path=NULL;
+    char *cli_cert=NULL;
     int loaded=0;
 
     for(int i=1;i<argc;i++){
@@ -497,8 +499,29 @@ int init_auth(int argc, char **argv)
                 i++;
             }
 
-            else if(strcmp(argv[i],"--url")==0 && i+1<argc){
-                safe_strncpy(cli_url,argv[i+1],sizeof(cli_url));
+           else if(strcmp(argv[i],"--url")==0 && i+1<argc){
+               safe_strncpy(cli_url,argv[i+1],sizeof(cli_url));
+               i++;
+            }
+
+           else if(strcmp(argv[i],"--cert")==0){
+               if(i+1>=argc){
+                  ERR("Option --cert requires path");
+                  exit(EXIT_BAD_ARGS);
+               }
+              const char *path = argv[i + 1];
+              /* Make sure the file exists */
+              if(access(path, R_OK) != 0){
+                 ERR("Cert file '%s' does not exist or is not readable", path);
+                 exit(EXIT_BAD_ARGS);
+              }
+
+              cli_cert=argv[i+1];
+              i++;
+            }
+
+            else if(strcmp(argv[i],"--insecure")==0 && i+1<argc){
+                creds.qbt_insecure=1;
                 i++;
             }
 
@@ -576,7 +599,11 @@ int init_auth(int argc, char **argv)
         safe_strncpy(creds.qbt_url,cli_url,sizeof(creds.qbt_url));
         loaded = 0;
     }
-     if(!can_attempt_login()){
+    if(cli_cert){
+        safe_strncpy(creds.qbt_cert,cli_cert,sizeof(creds.qbt_cert));
+        loaded = 0;
+    }
+    if(!can_attempt_login()){
         printf("[No credentials supplied]\n");
         exit(EXIT_FILE);
     }
