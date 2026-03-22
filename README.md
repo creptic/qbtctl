@@ -454,5 +454,6 @@ If you enjoy **qbtctl**, consider buying me a coffee
 
 ---
 # Notes
+- No https support. 
 - Special thank you to the cJSON drop in from https://github.com/DaveGamble/cJSON
 ---
