@@ -1,26 +1,22 @@
-CC      := gcc
-CFLAGS  := -O2 -Wall -Wextra
-LDFLAGS := -lm -ldl -lpthread
+# Simple Makefile for qbtctl (dynamic linking)
 
-QBTCTL_SRC := auth.c cJSON.c help.c qbtctl.c
-QBTCTL_BIN := qbtctl
+CC := gcc
+CFLAGS := -O2 -Wall -Wextra -Wno-unused-function
+LDFLAGS := -lcurl -lsodium
 
-# Default: dynamic
-LIBS := -lcurl -lsodium -lz -lmbedtls -lmbedx509 -lmbedcrypto
-
-# Static build toggle
-ifeq ($(STATIC),1)
-    CFLAGS  += -static
-    LDFLAGS += -static
-endif
-
-all: $(QBTCTL_BIN)
-
-$(QBTCTL_BIN):
-	$(CC) $(CFLAGS) $(QBTCTL_SRC) -o $(QBTCTL_BIN) \
-	$(LIBS) $(LDFLAGS)
-
-clean:
-	rm -f $(QBTCTL_BIN)
+SRC := $(wildcard *.c)
+OBJ := $(SRC:.c=.o)
+TARGET := qbtctl
 
 .PHONY: all clean
+
+all: $(TARGET)
+
+$(TARGET): $(OBJ)
+	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+
+%.o: %.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+clean:
+	rm -f $(OBJ) $(TARGET)

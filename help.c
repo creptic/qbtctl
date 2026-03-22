@@ -5,8 +5,8 @@
  *          Handles printing command lists, flags, examples, and detailed
  *          instructions for users.
  *
- * Version: 1.4.9
- * Date:    2026-03-22
+ * Version: 1.4.7
+ * Date:    2026-03-20
  *
  * Features:
  *   - Displays full help for all commands and options
@@ -36,8 +36,6 @@ void show_help()
     printf("  --url <url>          qBittorrent WebUI URL (ex: http://localhost:8080)\n");
     printf("  --user <user>        qBittorrent username (default is admin)\n");
     printf("  --pass <pass>        qBittorrent password (NULL allowed)\n");
-    printf("  --insecure           Allow use of insecure certificate with https SSL\n");
-    printf("  --cert <path>        Path to certificate for https SSL (ex cert.perm)\n");
     printf("  -h, --hash <hash>    Torrent hash (minimum 6 chars)\n");
     printf("  -a, --show-all       Show basic torrent info, all torrents\n");
     printf("  -c, --show-all-clean Show basic torrents info, all torrents (borderless)\n");

@@ -29,19 +29,10 @@ https://github.com/creptic/qbtctl/releases/latest/download/qbtctl
 
 ---
 
-## Example 'power user' usage 
-
-```bash
-# Pause all downloading torrents and set sequential download
-for h in $(qbtctl -ghl | tr ',' ' '); do
-    qbtctl -h $h --pause --set-seqdl 1
-done
-```
----
-
-💡 **Quick Reference**
+💡 **Quick Reference / Cheat Sheet**
 
 Most common commands and flags are listed in the [**Options**](#options) section below.  
+Refer there for full details and all available flags.
 
 ---
 
@@ -52,18 +43,17 @@ Before compiling `qbtctl`, ensure your system has:
 - **C compiler** (`cc`, `gcc`, or `clang`)
 - **libcurl** (for connecting to qbittorent api)
 - **libsodium** (for encrypting/decrypting password) 
-- **mbedtls** (for https support)
 - POSIX-compatible OS (Linux, macOS, etc.)
 
 A Makefile is included.
 
-Compile:
+Compile with:
 
 ```bash
 make
 ```
 
-For a portable build use `make STATIC=1` or see the Docker section below. [**static build**](#static-build-using-docker), 
+For a portable [**static build**](#static-build-using-docker), see the Docker section below.
 
 ---
 
@@ -81,46 +71,66 @@ make
 ---
 
 # Authentication Setup
+
 `qbtctl` requires qBittorrent Web API credentials.
+
 Credentials can be provided:
+
 - via **auth.txt** (or a file saved with --setup using then using -c filename)
 - via **command-line arguments** (overides file credentials)
+
 Auth file search order:
+
 1. `~/.qbtctl/auth.txt`
 2. `./auth.txt` (inside the qbtctl directory)
 3. Custom path using `-c <path>` (overrride)
 ---
+
 # Interactive Setup
+
 Run:
+
 ```bash
 ./qbtctl --setup
 ```
+
 You will be prompted for:
+
 - qBittorrent URL (default: `http://localhost`)
 - Port (default: 8080)
 - Username
 - Password
 
 Note: To save to program directory just type ```auth.txt``` or alternate filename, when saving in -i or --setup
+
 - Use full filename when saving, it will not create if pointed to a directory only.
+      
 By default credentials are saved to:
 ```text
 ~/.qbtctl/auth.txt
 ```
 ---
+
 # Command-Line Overrides
+
 You may override credentials when running commands:
+
 ```bash
 ./qbtctl --url http://host:8080 --user admin --pass mypass [command]
 ```
+
 ---
 # 💡 Usage Examples
 These examples assume you have already set up credentials with `./qbtctl --setup`.
+
 ## 1. Watch all torrents
+
 ```bash
 ./qbtctl -w
 ```
+
 **Example output:**
+
 ```
 Active torrents: 3 | Total DL: 28.6M | Total UL: 1.4M
 
@@ -134,33 +144,48 @@ Active torrents: 3 | Total DL: 28.6M | Total UL: 1.4M
 +-------------------------------------+--------+----------+------+----------+----------+----------+----------+----------+--------------------+--------------+-----------+
 |       Press <Ctrl>+c to quit        |
 +-------------------------------------+
+
 ```
+
 ## 2. Show all torrents
+
 ```bash
 ./qbtctl -a
 ```
+
 ```text
+
 +------------------------------------------+--------+--------------+--------------+--------------+--------------+--------------+----------+------------------+
 | Name                                     | Hash   | UL Limit(Kb) | DL Limit(Kb) | State        | Seed Time    | Limit D:H:M  | Category | Tags             |
 +------------------------------------------+--------+--------------+--------------+--------------+--------------+--------------+----------+------------------+
 | Ubuntu.ISO                               | 9c3289 | 0            | 0            | stalledUP    | 01:01:01     | 04:04:04     | ISO      | ISO, Debian      |
+
 ```
+
 With raw output (bytes, seconds, true/false):
+
 ```bash
 ./qbtctl -r -a
 ```
+
 ```text
 +------------------------------------------+--------+--------------+--------------+--------------+--------------+--------------+----------+------------------+
 | Name                                     | Hash   | UL Limit (b) | DL Limit (b) | State        | Seed Time    | Limit(secs)  | Category | Tags             |
 +------------------------------------------+--------+--------------+--------------+--------------+--------------+--------------+----------+------------------+
 | Ubuntu.ISO                               | 9c3289 | 0            | 0            | stalledUP    | 90104        | 360240       | ISO      | ISO, Debian      |
+
 ```
+
 ---
+
 ## 3. Show single torrent info (with or without raw)
+
 ```bash
 ./qbtctl -s -h 9c3289
 ```
+
 **Example output:**
+
 ```text
 +------------------------------------------+
 Name: Ubuntu.ISO
@@ -188,61 +213,89 @@ ETA: 100:00:00
 State: uploading
 Progress: 100%
 +------------------------------------------+
+
 ```
+
 With raw JSON:
+
 ```bash
 ./qbtctl -sj -h 1562EG
 ```
+
 ```json
 {"name":"ARCH.ISO","state":"stalledUP","dl_limit":1048576,"ul_limit":524288,"ratio":2.0,"seed_time":45296,....etc}
 ```
+
 ---
+
 ## 4. Modify torrent settings
+
 Set category and tags:
+
 ```bash
 ./qbtctl -sc Linux -st Linux,ISO -h 9c3289
 ```
+
 Set upload and download limits:
+
 ```bash
 ./qbtctl -sul 1024 -sdl 2048 -h 9c3289
 ```
+
 Enable sequential download and superseed:
 
 ```bash
 ./qbtctl -ssd 1 -sss 1 -h 9c3289
 ```
+
 ---
+
 ## 5. Pause(stop), resume(start), or remove torrents
+
 Pause a torrent:
+
 ```bash
 ./qbtctl -ap -h 9c3289
 ```
+
 Resume a torrent:
+
 ```bash
 ./qbtctl -as -h 9c3289
 ```
+
 Remove torrent (keep data):
+
 ```bash
 ./qbtctl -ar -h 9c3289
 ```
+
 Delete torrent and data:
 
 ```bash
 ./qbtctl -del -h 9c3289
 ```
+
 ---
+
 ## 6. Move torrent data
+
 ```bash
 ./qbtctl -am /downloads/linux -h 9c3289
 ```
+
 Moves the files to `/downloads/linux` on the server.
 
 ---
+
 ## 7. Quick non-interactive run
+
 If you want to run commands directly with credentials:
+
 ```bash
 ./qbtctl --url http://localhost:8080 --user admin --pass mypass -a
 ```
+
 ---
 
 ## 8. Add a torrent file, set category to iso and show name)
@@ -250,7 +303,9 @@ If you want to run commands directly with credentials:
 ```bash
 ./qbtctl --add torrent.file --set-category "ISO" -gn
 ```
+
 # Options
+
 ```bash
 -help, --help            Show help message
 -i, --setup              Setup server credentials interactively
@@ -260,8 +315,6 @@ If you want to run commands directly with credentials:
 --url <url>              qBittorrent WebUI URL (ex: http://localhost:8080)
 --user <user>            qBittorrent username (default: admin)
 --pass <pass>            qBittorrent password (NULL allowed)
---insecure               Allow use of insecure certificate with https SSL
---cert <path>            Path to certificate for https SSL (ex cert.perm)
 -h, --hash <hash>        Torrent hash (minimum 6 characters)
 -a, --show-all           Show basic torrent info for all torrents
 -c, --show-all-clean     Show torrents info (borderless output)
@@ -270,8 +323,11 @@ If you want to run commands directly with credentials:
 -sj, --show-single-json  Show single torrent info as JSON (requires hash)
 -v, --version            Show version and exit
 ```
+
 ---
+
 # Actions (requires --hash)
+
 ```bash
 -am <path>, --move <path>  Move torrent to <path> on the server
 -as, --start               Start torrent
@@ -281,6 +337,7 @@ If you want to run commands directly with credentials:
 -del, --delete             Stop, remove, and delete torrent and data
 -add <file/magnet>, --add <file/magnet> Add torrent via file or magnet link
 ```
+
 ---
 # Setters (requires --hash)
 ```bash
@@ -361,38 +418,22 @@ Always check $? immediately after a command for accurate results.
 Run this inside the source directory:
 
 ```bash
-docker run --rm -v "$(pwd):/out" -e HOST_UID=$(id -u) -e HOST_GID=$(id -g) alpine:latest /bin/sh -c "
-# Minimal build dependencies
-apk add --no-cache build-base musl-dev zlib-static pkgconf wget tar \
-    libsodium-dev libsodium-static mbedtls-dev mbedtls-static binutils
-
-# Download and build curl statically with mbedtls (ultra-minimal)
+docker run --rm -v $(pwd):/out alpine:latest /bin/sh -c "
+apk add --no-cache build-base musl-dev zlib-static pkgconf wget tar libsodium-dev libsodium-static &&
 cd /tmp &&
 wget https://curl.se/download/curl-8.17.0.tar.gz &&
 tar xzf curl-8.17.0.tar.gz &&
 cd curl-8.17.0 &&
-./configure --disable-shared --enable-static \
-            --with-mbedtls \
-            --disable-ldap --disable-ldaps --disable-ntlm \
-            --disable-ftp --disable-file --disable-dict --disable-telnet \
-            --disable-pop3 --disable-imap --disable-smtp --disable-gopher \
-            --disable-manual --disable-psl --without-libpsl \
-            --disable-debug --disable-unix-sockets --disable-symbol-hiding \
-            --disable-verbose --disable-ares --disable-rtsp --disable-doh \
-            --disable-cookies --disable-hsts --disable-doh \
-            --enable-optimize &&
-make -j\$(nproc)
-
-# Build qbtctl statically
+./configure --disable-shared --enable-static --without-ssl --disable-ntlm --disable-ldap --disable-ldaps \
+            --disable-ftp --disable-file --disable-dict --disable-telnet --disable-pop3 --disable-imap \
+            --disable-smtp --disable-gopher --disable-manual --disable-psl --without-libpsl &&
+make -j$(nproc) &&
 cd /out &&
 gcc -O2 -static -s \
-    -I/tmp/curl-8.17.0/include \
-    -L/tmp/curl-8.17.0/lib/.libs \
-    -o qbtctl *.c \
-    -lcurl -lsodium -lz -lmbedtls -lmbedx509 -lmbedcrypto -lm -ldl -lpthread
-
-# Set host UID/GID ownership
-chown \$HOST_UID:\$HOST_GID qbtctl
+-I/tmp/curl-8.17.0/include \
+-L/tmp/curl-8.17.0/lib/.libs \
+-o qbtctl *.c \
+-lcurl -lsodium -lz -lm -ldl -lpthread
 "
 ```
 ---
@@ -404,6 +445,7 @@ If you enjoy **qbtctl**, consider buying me a coffee
 
 ---
 # Notes
+- Not tested with SSL (https://), I added some code but needs testing.
 - Special thank you to the cJSON drop in from https://github.com/DaveGamble/cJSON
 
 ---

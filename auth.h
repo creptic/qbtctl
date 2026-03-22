@@ -5,8 +5,8 @@
  *          for the qbtctl CLI. Provides secure handling of credentials
  *          for qBittorrent Web API access.
  *
- * Version: 1.4.9
- * Date:    2026-03-22
+ * Version: 1.4.7
+ * Date:    2026-03-20
  *
  * Features:
  *   - Defines authentication structs for username/password storage
@@ -30,8 +30,6 @@ struct qbt_creds {
     char qbt_user[64];    // Username
     char qbt_pass[64];    // Password (AES encrypted in auth file)
     char qbt_hash[41];    // Currently selected torrent hash (40 hex chars + null terminator)
-    char qbt_cert[256];   // cert.perm path
-    int qbt_insecure;     // flag to allow for ssh insecure for https that need it.
 };
 
 /*======== GLOBAL VARIABLE ========*/
