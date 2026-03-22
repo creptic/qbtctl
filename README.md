@@ -30,15 +30,16 @@ https://github.com/creptic/qbtctl/releases/latest/download/qbtctl
 ---
 
 ## Example 
-Pause all torrents and set sequential download to 1 (ON)
+
+Pause all torrents, set sequential download to 1 (ON), and ratio to 2.0 
 ```bash
 for h in $(qbtctl -ghl); do
-    qbtctl -h $h --pause --set-seqdl 1
+    qbtctl -h $h --pause --set-seqdl 1 -srl 2.0
 done
 ```
 ---
 
-💡 **Quick Reference / Cheat Sheet**
+## 💡 **Quick Reference**
 
 Most common commands and flags are listed in the [**Options**](#options) section below.  
 
@@ -453,7 +454,5 @@ If you enjoy **qbtctl**, consider buying me a coffee
 
 ---
 # Notes
-- Not tested with SSL (https://), I added some code but needs testing.
 - Special thank you to the cJSON drop in from https://github.com/DaveGamble/cJSON
-
 ---
