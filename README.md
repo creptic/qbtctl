@@ -29,6 +29,16 @@ https://github.com/creptic/qbtctl/releases/latest/download/qbtctl
 
 ---
 
+## Example 'power user' usage 
+
+```bash
+# Pause all downloading torrents and set sequential download
+for h in $(qbtctl -ghl | tr ',' ' '); do
+    qbtctl -h $h --pause --set seq=1
+done
+```
+---
+
 💡 **Quick Reference**
 
 Most common commands and flags are listed in the [**Options**](#options) section below.  
