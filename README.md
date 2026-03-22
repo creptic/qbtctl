@@ -34,7 +34,7 @@ https://github.com/creptic/qbtctl/releases/latest/download/qbtctl
 ```bash
 # Pause all downloading torrents and set sequential download
 for h in $(qbtctl -ghl | tr ',' ' '); do
-    qbtctl -h $h --pause --set seq=1
+    qbtctl -h $h --pause --set-seqdl 1
 done
 ```
 ---
