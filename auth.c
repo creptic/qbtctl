@@ -4,8 +4,8 @@
  * Purpose: Handles authentication for qbtctl CLI, including credential initialization,
  *          secure password storage, and integration with the qBittorrent Web API.
  *
- * Version: 1.4.7
- * Date:    2026-03-20
+ * Version: 1.5.0
+ * Date:    2026-03-23
  *
  * Features:
  *   - Initialize authentication from command-line arguments or stored credentials
@@ -14,9 +14,21 @@
  *   - Integration with qbtctl main functions for API actions
  *   - Ensures credentials are not visible in process lists
  *
+ * Auth Priority Order:
+ *   1. CLI args (--user, --pass, --url)
+ *   2. Explicit config file (-c path)
+ *   3. ./auth.txt (cwd)
+ *   4. Binary directory auth.txt
+ *   5. ~/.qbtctl/auth.txt
+ *
+ * Notes:
+ *   - Passwords are stored encrypted (crypto_secretbox)
+ *   - Decryption occurs at load time into memory only
+ *   - No interactive prompts unless --setup is used
+ *
  * Author:  Creptic
  * GitHub:  https://github.com/creptic/qbtctl
- */
+*/
 
 #include "auth.h"
 #include <stdio.h>
@@ -46,12 +58,9 @@
 #define EXIT_FILE           5
 #define EXIT_ACTION_FAIL    6 /* Not used here future maybe */
 
-
 struct qbt_creds creds = {0};
 
-
 /* SAFE STRING COPY */
-
 static void safe_strncpy(char *dst, const char *src, size_t dst_size)
 {
     if(!dst || !src || dst_size==0) return;
@@ -66,9 +75,7 @@ static void safe_strncpy(char *dst, const char *src, size_t dst_size)
     dst[i]='\0';
 }
 
-
 /* HEX conversion */
-
 static void bytes_to_hex(const unsigned char *in, size_t len, char *out, size_t out_size)
 {
     const char hex[]="0123456789ABCDEF";
@@ -101,11 +108,29 @@ static void hex_to_bytes(const char *hex, unsigned char *out, size_t out_size)
     }
 }
 
-
-/* SAVE AUTH FILE */
-
 static int save_auth_file(const char *path)
 {
+/*
+ * save_auth_file
+ *
+ * Writes credentials to disk with encrypted password.
+ *
+ * Parameters:
+ *   path - Full path to auth file
+ *
+ * Behavior:
+ *   - Encrypts creds.qbt_pass using libsodium (crypto_secretbox)
+ *   - Password is hex-encoded before writing
+ *   - Ensures directory exists (0700) and file is 0600
+ *
+ * Security Notes:
+ *   - Uses static key + zero nonce → NOT cryptographically secure
+ *   - Provides basic obfuscation only (prevents plaintext storage)
+ *   - Not safe against determined attackers or file disclosure
+ *
+ * Returns:
+ *   EXIT_OK on success, exits on failure
+*/
     if(!path){
         ERR("Invalid path");
         exit(EXIT_FILE);
@@ -177,11 +202,28 @@ static int save_auth_file(const char *path)
         return EXIT_OK;
 }
 
-
-/* LOAD AUTH FILE */
-
 static int load_auth_file(const char *path)
 {
+/*
+ * load_auth_file
+ *
+ * Loads credentials from file and decrypts password if present.
+ *
+ * Parameters:
+ *   path - Path to auth file
+ *
+ * Behavior:
+ *   - Parses key=value lines (url, user, password)
+ *   - Decrypts password using libsodium
+ *   - Populates global creds struct
+ *
+ * Returns:
+ *   1 if file loaded successfully
+ *   0 if file not found (non-fatal)
+ *
+ * Errors:
+ *   - Exits if decryption fails (corrupt or invalid file)
+*/
     if(!path) return 0;
 
     if(sodium_init()<0){
@@ -271,10 +313,23 @@ static int load_auth_file(const char *path)
 }
 
 
-/* Helper */
+
 
 bool can_attempt_login(void)
 {
+/*
+ * can_attempt_login
+ *
+ * Determines if sufficient data exists to attempt API interaction.
+ *
+ * Rules:
+ *   - URL is required
+ *   - If no user/pass provided → allow (no-auth mode)
+ *   - If user is provided → allow (password may be optional depending on setup)
+ *
+ * Returns:
+ *   true if login/API attempt is valid, false otherwise
+*/
     if(creds.qbt_url[0] == 0)
         return false;
 
@@ -289,12 +344,30 @@ bool can_attempt_login(void)
     return false;
 }
 
-
-
-
-/* INTERACTIVE SETUP */
 int interactive_setup()
 {
+/*
+ * interactive_setup
+ *
+ * Interactive CLI wizard for creating an auth file.
+ *
+ * Steps:
+ *   1. URL input (default: http://localhost)
+ *   2. Port selection
+ *   3. Username
+ *   4. Password (hidden input)
+ *   5. Save path selection
+ *   6. Confirmation + save
+ *
+ * Behavior:
+ *   - Password input disables terminal echo
+ *   - Saves encrypted credentials via save_auth_file()
+ *   - Exits process after completion
+ *
+ * Notes:
+ *   - Designed for first-time setup
+ *   - Not used in normal CLI execution
+*/
     char tmp_url[256]={0}, tmp_user[64]={0}, tmp_pass[64]={0};
     const char *home=getenv("HOME");
     static char fallback_home[256];
@@ -442,9 +515,16 @@ int interactive_setup()
     exit (EXIT_OK);
 }
 
-
 static int load_auth_from_binary_dir()
 {
+/*
+ * load_auth_from_binary_dir
+ *
+ * Attempts to load auth.txt from the directory where the binary resides.
+ *
+ * Returns:
+ *   1 if loaded, 0 otherwise
+*/
     char exe[PATH_MAX]={0};
     char path[PATH_MAX]={0};
 
@@ -467,10 +547,37 @@ static int load_auth_from_binary_dir()
     return load_auth_file(path);
 }
 
-
-/* ----------------- INIT AUTH ----------------- */
 int init_auth(int argc, char **argv)
 {
+/*
+ * init_auth
+ *
+ * Initializes credentials from all supported sources.
+ *
+ * Parameters:
+ *   argc, argv - CLI arguments
+ *
+ * Flow:
+ *   1. Parse CLI args (--user, --pass, --url, -c, --setup)
+ *   2. Load credentials using priority:
+ *        a) -c <config>
+ *        b) ./auth.txt
+ *        c) binary_dir/auth.txt
+ *        d) ~/.qbtctl/auth.txt
+ *   3. Apply CLI overrides (highest priority)
+ *   4. Validate readiness via can_attempt_login()
+ *
+ * Behavior:
+ *   - CLI args override any loaded config
+ *   - Missing credentials allowed in no-auth mode
+ *   - Exits on invalid config or missing required fields
+ *
+ * Returns:
+ *   EXIT_OK on success
+ *
+ * Exits:
+ *   - On invalid args, missing config, or unusable credentials
+*/
     char cli_user[64]={0};
     char cli_pass[64]={0};
     char cli_url[256]={0};
@@ -521,27 +628,25 @@ int init_auth(int argc, char **argv)
             }
     }
 
-
-    /* 1. -c config_path has highest priority */
+    /* -c config_path has highest priority */
     if(config_path){
         if(load_auth_file(config_path))
             loaded = 1;
     }
 
-    /* 2. Check current directory auth.txt */
+    /* Check current directory auth.txt */
     if(!loaded){
         if(load_auth_file("auth.txt"))
             loaded = 1;
     }
 
-
+   /* Check binary dir */
    if(!loaded){
        if(load_auth_from_binary_dir())
            loaded = 1;
    }
 
-
-   /* 3. Fallback to HOME ~/.qbtctl/auth.txt */
+   /* Fallback to HOME ~/.qbtctl/auth.txt */
     if(!loaded){
         const char *home = getenv("HOME");
 
@@ -562,10 +667,11 @@ int init_auth(int argc, char **argv)
             loaded = 1;
     }
 
-    /* CLI override */
+    /* CLI override (highest priority) Any CLI-provided value replaces loaded config */
 
     if(cli_user[0]){
         safe_strncpy(creds.qbt_user,cli_user,sizeof(creds.qbt_user));
+
         loaded = 0;
     }
     if(cli_pass[0]){

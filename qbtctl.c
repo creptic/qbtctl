@@ -4,8 +4,8 @@
  * Purpose: Minimal, ultra-fast command-line interface for monitoring and controlling qBittorrent
  *          via its Web API. Includes live torrent monitoring, sorting, and torrent info display.
  *
- * Version: 1.4.7
- * Date:    2026-03-20
+ * Version: 1.5.0
+ * Date:    2026-03-23
  *
  * Features:
  *   - Set/Get a torrent settings in real time
@@ -36,12 +36,21 @@
 
 void show_help(void);
 
-#define QBTCTL_VERSION "1.4.7"
-#define MAX_JSON 1048576
-#define HASH_WIDTH 40
-#define QBT_MAX_HASHES 1024
+/* QBTCTL_VERSION - Current version */
+#define QBTCTL_VERSION "1.5.0"
 
-/* ================= EXIT CODES ================= */
+#define MAX_JSON 1048576
+/**
+ * MAX_JSON - Maximum allowed size of JSON responses in bytes.
+ * Used to prevent buffer overflows when fetching torrent data.
+*/
+
+#define HASH_WIDTH 40
+/* HASH_WIDTH - Standard width of a torrent hash.*/
+
+#define QBT_MAX_HASHES 1024
+/* QBT_MAX_HASHES - Maximum number of torrent hashes to track.*/
+
 
 #define EXIT_OK             0
 #define EXIT_LOGIN_FAIL     1
@@ -50,8 +59,24 @@ void show_help(void);
 #define EXIT_BAD_ARGS       4
 #define EXIT_FILE           5
 #define EXIT_ACTION_FAIL    6
-#define ERR(fmt, ...) fprintf(stderr, "[ERROR] " fmt "\n", ##__VA_ARGS__)
+/* ================= EXIT CODES ================= */
+/**
+ * EXIT_OK         - Successful execution
+ * EXIT_LOGIN_FAIL  - Login to qBittorrent WebUI failed
+ * EXIT_FETCH_FAIL  - Fetching data failed
+ * EXIT_SET_FAIL    - Setting torrent property failed
+ * EXIT_BAD_ARGS    - Command line arguments invalid
+ * EXIT_FILE        - File read/write failure
+ * EXIT_ACTION_FAIL - Specific action (start/pause/remove) failed
+ */
 
+#define ERR(fmt, ...) fprintf(stderr, "[ERROR] " fmt "\n", ##__VA_ARGS__)
+/**
+ * ERR(fmt, ...) - macro for printing error messages to stderr.
+ * Automatically prepends "[ERROR]" to the message.
+*/
+
+/* ================= GLOBAL FLAGS ================= */
 int show_all_clean = 0;
 int show_json = 0;
 int show_all_json = 0;
@@ -60,39 +85,49 @@ bool if_watch = false;
 
 void show_version(void)
 {
+/*show_version() - Print the current qbtctl version.*/
     printf("qbtctl %s\n", QBTCTL_VERSION);
 }
 
 /* ================= GLOBAL TORRENT ================= */
+/**
+ * torrent - Holds the properties of a single torrent.
+ * All fields are updated when fetching data from qBittorrent API.
+*/
 struct {
-    char name[128];
-    char hash[64];
-    char tags[64];
-    char category[64];
-    int up_limit;
-    int dl_limit;
-    char dl_path[512];
-    float ratio_limit;
-    int seedtime;
-    int seedtime_limit;
-    bool superseed;
-    bool seq_dl;
-    bool auto_tmm;
-    char tracker[512];
-    bool is_private;
-    char state[64];
-    double progress;     // 0.0 - 100.0
-    long long size;      // bytes
-    long long downloaded;// bytes
-    long long uploaded;  // bytes
-    long long dlspeed;         // bytes/sec
-    long long upspeed;         // bytes/sec
-    float ratio;
-    long long eta;       // seconds remaining
+    char name[128];          // Torrent name
+    char hash[64];           // Torrent hash
+    char tags[64];           // CSV string of tags
+    char category[64];       // Torrent category
+    int up_limit;            // Upload limit in KB
+    int dl_limit;            // Download limit in KB
+    char dl_path[512];       // Download path on server
+    float ratio_limit;       // Ratio limit for seeding
+    int seedtime;            // Seed time elapsed (seconds)
+    int seedtime_limit;      // Maximum seed time (seconds)
+    bool superseed;          // Superseed mode enabled
+    bool seq_dl;             // Sequential download flag
+    bool auto_tmm;           // Automatic Torrent Management enabled
+    char tracker[512];       // Primary tracker URL
+    bool is_private;         // Private torrent flag
+    char state[64];          // Current state string (downloading, paused, etc.)
+    double progress;         // Download progress (0.0 - 100.0)
+    long long size;          // Total size in bytes
+    long long downloaded;    // Total downloaded bytes
+    long long uploaded;      // Total uploaded bytes
+    long long dlspeed;       // Current download speed (bytes/sec)
+    long long upspeed;       // Current upload speed (bytes/sec)
+    float ratio;             // Current upload/download ratio
+    long long eta;           // Estimated time remaining in seconds
 } torrent;
 
 /* ================= CURL MEMORY ================= */
 struct memory {
+/**
+ * memory - Used as a dynamic buffer for libcurl callbacks.
+ * data: pointer to buffer
+ * size: current buffer length
+*/
     char *data;
     size_t size;
 };
@@ -100,6 +135,14 @@ struct memory {
 /* ================= SAFE COPY ================= */
 static void safe_copy(char *dst, size_t dsz, const char *src)
 {
+/**
+ * safe_copy(dst, dsz, src) - Copies string src into dst safely.
+ * Ensures null-termination and avoids buffer overflow.
+ *
+ * @dst: Destination buffer
+ * @dsz: Size of destination buffer
+ * @src: Source string
+*/
     if (!dst) return;
     if (!src) { dst[0] = 0; return; }
 
@@ -109,10 +152,12 @@ static void safe_copy(char *dst, size_t dsz, const char *src)
     dst[len] = 0;
 }
 
-/* ================= CURL MEMORY ================= */
+/* ================= CURL WRITE CALLBACKS ================= */
 static size_t write_cb(void *ptr, size_t size, size_t nmemb, void *userdata)
 {
-    struct memory *mem = (struct memory *)userdata;
+/* write_cb() - libcurl write callback to append response data to memory buffer. */
+
+struct memory *mem = (struct memory *)userdata;
     if (!mem || !mem->data) return 0;
 
     if (size != 0 && nmemb > SIZE_MAX / size) return 0;
@@ -132,15 +177,29 @@ static size_t write_cb(void *ptr, size_t size, size_t nmemb, void *userdata)
 
 static size_t discard_cb(void *ptr, size_t size, size_t nmemb, void *userdata)
 {
+/**
+ * discard_cb() - libcurl callback that ignores all response data.
+ * Useful for POST requests where we only care about HTTP status.
+*/
     (void)ptr;
     (void)userdata;
 
     return size * nmemb;
 }
 
-/* ================= LOGIN ================= */
+/* ================= LOGIN FUNCTION ================= */
 static int login_qbt(CURL *curl)
 {
+/**
+ * login_qbt(curl) - Logs in to qBittorrent WebUI using credentials.
+ * Uses POST to /api/v2/auth/login, sets cookies in memory.
+ *
+ * @curl: Initialized CURL handle
+ *
+ * Returns:
+ *  EXIT_OK on success
+ *  EXIT_LOGIN_FAIL on failure
+*/
     if (!curl) return EXIT_LOGIN_FAIL;
 
     char url[512];
@@ -176,9 +235,28 @@ static int login_qbt(CURL *curl)
 
     return EXIT_OK;
 }
+
 /* ================= GET JSON ================= */
 char *qbt_get_json(CURL *curl, const char *url)
 {
+/**
+ * qbt_get_json(curl, url)
+ *
+ * Performs an HTTP GET request using the provided CURL handle
+ * and returns the response body as a dynamically allocated string.
+ *
+ * @curl: Initialized CURL handle
+ * @url: URL to fetch
+ *
+ * Returns:
+ *   Pointer to a heap-allocated JSON string (caller must free)
+ *   NULL on error
+ *
+ * Notes:
+ *   - Uses write_cb to append data to memory buffer safely.
+ *   - Verifies HTTP status code is 200.
+ *   - Handles memory allocation errors gracefully.
+*/
     if (!curl || !url)
     {
         ERR("qbt_get_json: NULL curl or url");
@@ -220,12 +298,23 @@ char *qbt_get_json(CURL *curl, const char *url)
         return NULL;
     }
 
-    return mem.data; /* caller must free */
+    return mem.data;
 }
 
-/* ================= RESOLVE && VALIDATE SHORT HASH ================= */
+/* ================= HASH VALIDATION ================= */
 bool validate_hash(const char *hash)
 {
+/**
+ * validate_hash(hash)
+ *
+ * Checks whether a string is a valid 40-character hexadecimal torrent hash.
+ *
+ * @hash: Hash string to validate
+ *
+ * Returns:
+ *   true  - valid hash
+ *   false - invalid hash or NULL
+*/
     if (!hash) return false;
 
     size_t len = strlen(hash);
@@ -239,9 +328,22 @@ bool validate_hash(const char *hash)
     return true;
 }
 
-/* ================= RESOLVE SHORT HASH ================= */
+/* ================= SHORT HASH RESOLUTION ================= */
 int resolve_short_hash(CURL *curl)
 {
+/**
+ * resolve_short_hash(curl)
+ *
+ * Resolves a short (truncated) torrent hash to a full 40-character hash.
+ * Queries /api/v2/torrents/info and matches input against all torrent hashes.
+ *
+ * Returns:
+ *   1 if successfully resolved
+ *   0 if failed (no match, ambiguous, or error)
+ *
+ * Side effects:
+ *   Updates creds.qbt_hash to the full resolved hash on success.
+*/
     if (curl == NULL || creds.qbt_hash[0] == '\0') return 0;
 
     size_t input_len = strlen(creds.qbt_hash);
@@ -305,7 +407,18 @@ int resolve_short_hash(CURL *curl)
 
 static bool resolve_and_validate_hash(CURL *curl, const char *hash)
 {
-
+/**
+ * resolve_and_validate_hash(curl, hash)
+ *
+ * Convenience function that resolves a short hash and validates it.
+ * Exits program with EXIT_BAD_ARGS if resolution or validation fails.
+ *
+ * @curl: Initialized CURL handle
+ * @hash: User-provided hash (may be short)
+ *
+ * Returns:
+ *   true if resolved and valid
+*/
     if (!curl || !hash) return false;
 
     safe_copy(creds.qbt_hash, sizeof(creds.qbt_hash), hash);
@@ -326,6 +439,23 @@ static bool resolve_and_validate_hash(CURL *curl, const char *hash)
 /* ================= POPULATE TORRENT STRUCT ================= */
 int populate_torrent_info_struct(CURL *curl)
 {
+/**
+ * populate_torrent_info_struct(curl)
+ *
+ * Fetches torrent info for the hash stored in creds.qbt_hash
+ * and populates the global `torrent` struct.
+ *
+ * @curl: Initialized CURL handle
+ *
+ * Returns:
+ *   1 on success
+ *   0 on failure
+ *
+ * Notes:
+ *   - Supports show_json mode: prints raw JSON if enabled.
+ *   - Converts JSON fields to the appropriate types in the global struct.
+ *   - Handles string, numeric, boolean, and progress fields.
+*/
     if (!curl)
     {
         ERR("populate_torrent_info_struct: NULL curl");
@@ -424,7 +554,6 @@ int populate_torrent_info_struct(CURL *curl)
     item = cJSON_GetObjectItem(obj, "ratio");
     if (cJSON_IsNumber(item)) torrent.ratio = (float)item->valuedouble;
 
-    /* ----- numeric fields ----- */
     item = cJSON_GetObjectItem(obj, "upspeed");
     if(item && cJSON_IsNumber(item))
         torrent.upspeed = (long long)item->valuedouble;
@@ -461,6 +590,23 @@ int populate_torrent_info_struct(CURL *curl)
 /* ================= ENSURE SINGLE LOADED ================= */
 static int ensure_single_loaded(CURL *curl, int *single_loaded)
 {
+/**
+ * ensure_single_loaded(curl, single_loaded)
+ *
+ * Waits until the global `torrent` struct has been populated
+ * (i.e., a single torrent is loaded), retrying a few times if necessary.
+ *
+ * @curl: Initialized CURL handle
+ * @single_loaded: pointer to flag tracking whether the torrent has already been loaded
+ *
+ * Returns:
+ *   1 if a torrent is successfully loaded
+ *   0 on failure (after retries)
+ *
+ * Notes:
+ *   - Sleeps 200ms between retries for up to ~4 seconds.
+ *   - Uses populate_torrent_info_struct internally.
+*/
     if (*single_loaded) return 1;
 
     int retries = 20;          // ~4 seconds total
@@ -481,6 +627,12 @@ static int ensure_single_loaded(CURL *curl, int *single_loaded)
 
 /* ================= GETTERS ================= */
 static char *format_bool(bool value) {
+/**
+ * format_bool(value) - Formats a boolean flag for output.
+ * If raw mode is off (raw==0), returns "0" or "1".
+ * If raw mode is on (raw==1), returns "true" or "false".
+ * Returns pointer to static buffer (overwritten on next call).
+*/
     static char buf[8];
     if (raw == 0) {
         if (value) {
@@ -500,6 +652,15 @@ static char *format_bool(bool value) {
 
 void fmt_bytes(char *buf, size_t sz, long long bytes)
 {
+/**
+ * fmt_bytes(buf, sz, bytes) - Formats a byte value into human-readable form.
+ * Converts bytes to KB, MB, or GB with 2 decimal precision.
+ * If raw mode is enabled, numeric fields are left as raw bytes elsewhere.
+ *
+ * @buf: Output buffer
+ * @sz: Size of buffer
+ * @bytes: Byte count to format
+*/
     if(bytes >= 1073741824)
         snprintf(buf,sz,"%.2fG", bytes / 1073741824.0);
     else if(bytes >= 1048576)
@@ -513,6 +674,11 @@ void fmt_bytes(char *buf, size_t sz, long long bytes)
 
 char *get_hashes_csv(CURL *curl)
 {
+/**
+ * get_hashes_csv(curl) - Fetches all torrent hashes from qBittorrent API.
+ * Returns a CSV string of 6-character short hashes (raw==0) or full hashes (raw==1).
+ * Caller is responsible for freeing returned string.
+*/
     if(!curl) return NULL;
 
     char url[512];
@@ -568,20 +734,28 @@ char *get_hashes_csv(CURL *curl)
     return out;
 }
 
+/* ================= BOOLEAN GETTERS ================= */
 char *get_private()  { return format_bool(torrent.is_private); }
 char *get_superseed() { return format_bool(torrent.superseed); }
 char *get_seq_dl()    { return format_bool(torrent.seq_dl); }
 char *get_auto_tmm()  { return format_bool(torrent.auto_tmm); }
 
+/* ================= STRING GETTERS ================= */
 char *get_name()     { return torrent.name; }
 char *get_hash()     { return torrent.hash; }
 char *get_tags()     { return torrent.tags; }
 char *get_category() { return torrent.category; }
 char *get_dl_path()  { return torrent.dl_path; }
-
 char *get_state()  { return torrent.state; }
+
 char *get_tracker(void)
 {
+/**
+ * get_tracker() - Returns formatted tracker URL.
+ * - Raw mode: returns tracker as-is
+ * - Normal mode: converts host to lowercase, preserves scheme
+ * Returns pointer to static buffer.
+*/
     static char formatted[512];
 
     if (!torrent.tracker[0])
@@ -831,6 +1005,15 @@ static char *get_progress(void)
 /* ================= GET TRACKER LIST ================= */
 int get_tracker_list(CURL *curl)
 {
+/**
+ * get_tracker_list(curl) - Fetches all trackers for the current torrent.
+ * Deduplicates by hostname and normalizes URLs.
+ * Raw mode outputs full tracker URLs comma-separated.
+ * Normal mode outputs scheme://host, deduplicated, comma-separated.
+ *
+ * Returns number of trackers printed.
+ * Exits with error if hash is not loaded or fetch fails.
+*/
     if (!curl) {
         ERR("CURL handle is NULL");
         exit(EXIT_FETCH_FAIL);
@@ -893,14 +1076,6 @@ int get_tracker_list(CURL *curl)
             continue;
 
         const char *tracker = url_item->valuestring;
-
-        /* Skip internal trackers
-        if (strcmp(tracker, "** [DHT] **") == 0)
-            continue;
-        if (strcmp(tracker, "** [PeX] **") == 0)
-            continue;
-        if (strcmp(tracker, "** [LSD] **") == 0)
-            continue;  */
 
         /* ---------------- RAW MODE ---------------- */
         if (raw==1) {
@@ -977,10 +1152,19 @@ int get_tracker_list(CURL *curl)
     cJSON_Delete(root);
     return printed;
 }
+/* ================= SHOW FUNCTIONS ================= */
 
 /* ================= SHOW ALL TORRENTS INFO AS JSON ================= */
 int show_all_torrents_info_json(CURL *curl)
 {
+/**
+ * show_all_torrents_info_json(curl)
+ *
+ * Fetches all torrents from the qBittorrent API and prints the raw JSON.
+ *
+ * @curl: Initialized CURL handle
+ * Returns EXIT_OK on success, EXIT_FETCH_FAIL on failure.
+*/
     char url[512];
     snprintf(url, sizeof(url), "%s/api/v2/torrents/info", creds.qbt_url);
 
@@ -996,6 +1180,13 @@ int show_all_torrents_info_json(CURL *curl)
 /* ================= SHOW SINGLE TORRENT INFO ================= */
 void show_single_torrent_info()
 {
+/**
+ * show_single_torrent_info()
+ *
+ * Prints a single torrent's info using the getter functions.
+ * Includes name, hash, category, tags, limits, speed, progress, state, etc.
+ * Uses raw/human-readable formats depending on the global 'raw' flag.
+*/
     printf("+------------------------------------------+\n");
     printf("Name: %s\n", get_name());
     printf("Hash: %s\n", get_hash());
@@ -1027,6 +1218,17 @@ void show_single_torrent_info()
 /* ================= SHOW ALL TORRENTS INFO ================= */
 int show_all_torrents_info(CURL *curl)
 {
+/**
+ * show_all_torrents_info(curl)
+ *
+ * Fetches all torrents from the qBittorrent API and prints a formatted table.
+ * Supports 'raw' mode and 'show_all_clean' (simplified table output) flags.
+ *
+ * Columns: Name, Hash (6-char), UL Limit, DL Limit, State, Seed Time, Seed Time Limit,
+ *          Category, Tags
+ *
+ * Returns EXIT_OK on success, EXIT_FETCH_FAIL on fetch or parse error.
+*/
     char url[512];
     snprintf(url, sizeof(url), "%s/api/v2/torrents/info", creds.qbt_url);
 
@@ -1174,14 +1376,29 @@ int show_all_torrents_info(CURL *curl)
     return EXIT_OK;
 }
 
-/* !================ SETTERS ================! */
+/* ================= SETTER HELPER FUNCTIONS ================= */
 
-/* request helper */
 bool qbt_request(CURL *curl,
                  const char *endpoint,
                  const char *postfields,
                  struct memory *out_mem)
 {
+/**
+ * qbt_request(curl, endpoint, postfields, out_mem)
+ *
+ * Performs a CURL HTTP request (GET or POST) to the qBittorrent API.
+ *
+ * Handles:
+ * - Automatic retry and re-login if session expires (HTTP 403)
+ * - Optional output capture in memory (out_mem)
+ *
+ * @curl: Initialized CURL handle
+ * @endpoint: API endpoint (e.g., "/torrents/pause")
+ * @postfields: POST body if needed, NULL for GET
+ * @out_mem: Optional memory struct to capture response, or NULL to discard
+ *
+ * Returns true on success, false on failure.
+*/
     if (!curl || !endpoint) {
         fprintf(stderr, "[ERROR] Invalid arguments to qbt_request\n");
         return false;
@@ -1244,12 +1461,21 @@ bool qbt_request(CURL *curl,
     }
     return true;
 }
-/* ================= SETTER HELPERS ================= */
 
-
-/* Helper to parse upload/download limits */
 static bool parse_limit(const char *input, long long *out_value)
 {
+/**
+ * parse_limit(input, out_value)
+ *
+ * Parses a string representing a limit value.
+ * - Supports optional 'k' suffix (kilobytes)
+ * - Empty input sets out_value to -1
+ *
+ * @input: Input string (e.g., "1024", "10k")
+ * @out_value: Output parsed value in bytes
+ *
+ * Returns true if successfully parsed, false otherwise.
+*/
     if (!out_value) return false;
 
     if (!input || !input[0]) {
@@ -1291,9 +1517,18 @@ static bool parse_limit(const char *input, long long *out_value)
     return true;
 }
 
-/* Helper for setters (raw/non-raw) */
 int int_validate_set_value(const char *value_str)
 {
+/**
+ * int_validate_set_value(value_str)
+ *
+ * Validates boolean-like setter input depending on raw mode.
+ * - raw=0: accepts "0" or "1"
+ * - raw=1: accepts "true" or "false"
+ *
+ * @value_str: Input string
+ * Returns 0 or 1 if valid, -1 if invalid.
+*/
     if (!value_str) return -1;
 
     char val_lower[16];
@@ -1315,9 +1550,22 @@ int int_validate_set_value(const char *value_str)
     }
 }
 
-/* ================= SET UPLOAD LIMIT ================= */
+/* ================= SETTERS  ================= */
 int set_up_limit(CURL *curl, const char *limit_str)
 {
+/**
+ * set_up_limit(curl, limit_str)
+ *
+ * Sets the upload limit for the currently selected torrent.
+ * - Parses limit string (supports optional 'K' suffix for kilobytes)
+ * - Converts to bytes if raw mode is off
+ * - Sends POST request to /api/v2/torrents/setUploadLimit
+ *
+ * @curl: CURL handle
+ * @limit_str: Upload limit string (e.g., "1024", "2K")
+ * Returns EXIT_OK on success, EXIT_BAD_ARGS on invalid input,
+ * EXIT_SET_FAIL or EXIT_FETCH_FAIL on failure.
+*/
     if (!curl) {
         ERR("CURL handle is NULL");
         return EXIT_SET_FAIL;
@@ -1354,9 +1602,21 @@ int set_up_limit(CURL *curl, const char *limit_str)
         return EXIT_OK;
 }
 
-/* ================= SET DOWNLOAD LIMIT ================= */
 int set_dl_limit(CURL *curl, const char *limit_str)
 {
+/**
+ * set_dl_limit(curl, limit_str)
+ *
+ * Sets the download limit for the currently selected torrent.
+ * - Parses limit string (supports optional 'K' suffix for kilobytes)
+ * - Converts to bytes if raw mode is off
+ * - Sends POST request to /api/v2/torrents/setDownloadLimit
+ *
+ * @curl: CURL handle
+ * @limit_str: Download limit string (e.g., "1024", "2K")
+ * Returns EXIT_OK on success, EXIT_BAD_ARGS on invalid input,
+ * EXIT_SET_FAIL or EXIT_FETCH_FAIL on failure.
+*/
     if (!curl) { ERR("CURL handle is NULL");
         return EXIT_SET_FAIL;
     }
@@ -1393,9 +1653,20 @@ int set_dl_limit(CURL *curl, const char *limit_str)
     return EXIT_OK;
 }
 
-/* ================= SET SEEDTIME LIMIT ================= */
 int set_seedtime_limit(CURL *curl, const char *seedtime_str)
 {
+/**
+ * set_seedtime_limit(curl, seedtime_str)
+ *
+ * Sets the seeding time limit for the currently selected torrent.
+ * - Accepts DD:HH:MM format if raw=0, numeric seconds if raw=1
+ * - Sends POST request to /api/v2/torrents/setShareLimits
+ *
+ * @curl: CURL handle
+ * @seedtime_str: Seeding time string (DD:HH:MM or seconds)
+ * Returns EXIT_OK on success, EXIT_BAD_ARGS on invalid input,
+ * EXIT_FETCH_FAIL or EXIT_SET_FAIL on failure.
+*/
     if (!curl || !seedtime_str) {
         ERR("Invalid arguments");
         return EXIT_BAD_ARGS;
@@ -1461,9 +1732,20 @@ int set_seedtime_limit(CURL *curl, const char *seedtime_str)
     return EXIT_OK;
 }
 
-/* ================= SET RATIO LIMIT ================= */
 int set_ratio_limit(CURL *curl, const char *ratio_str)
 {
+/**
+ * set_ratio_limit(curl, ratio_str)
+ *
+ * Sets the share ratio limit for the currently selected torrent.
+ * - Accepts numeric ratio >= 0
+ * - Sends POST request to /api/v2/torrents/setShareLimits
+ *
+ * @curl: CURL handle
+ * @ratio_str: Ratio string (e.g., "1.5")
+ * Returns EXIT_OK on success, EXIT_BAD_ARGS on invalid input,
+ * EXIT_FETCH_FAIL or EXIT_SET_FAIL on failure.
+*/
     if (!curl || !ratio_str || !creds.qbt_hash[0]) {
         ERR("Invalid arguments");
         return EXIT_BAD_ARGS;
@@ -1509,9 +1791,20 @@ int set_ratio_limit(CURL *curl, const char *ratio_str)
     return EXIT_OK;
 }
 
-/* ================= SET CATEGORY ================= */
 int set_category(CURL *curl, const char *category)
 {
+/**
+ * set_category(curl, category)
+ *
+ * Sets or clears the category of the currently selected torrent.
+ * - If category does not exist, creates it
+ * - Sends POST request to /api/v2/torrents/setCategory
+ *
+ * @curl: CURL handle
+ * @category: Category name, empty string clears category
+ * Returns EXIT_OK on success, EXIT_BAD_ARGS on invalid input,
+ * EXIT_FETCH_FAIL or EXIT_SET_FAIL on failure.
+*/
     if (!curl) {
         ERR("CURL handle is NULL");
         return EXIT_BAD_ARGS;
@@ -1553,7 +1846,6 @@ int set_category(CURL *curl, const char *category)
     }
 
     /* ---------- CHECK IF CATEGORY EXISTS ---------- */
-
     struct memory mem;
     mem.data = malloc(MAX_JSON);
     if (!mem.data) {
@@ -1596,7 +1888,6 @@ int set_category(CURL *curl, const char *category)
     }
 
     /* ---------- CREATE CATEGORY IF MISSING ---------- */
-
     if (!exists) {
 
         char *escaped_create = curl_easy_escape(curl, category, 0);
@@ -1628,7 +1919,6 @@ int set_category(CURL *curl, const char *category)
     }
 
     /* ---------- SET CATEGORY ---------- */
-
     char *escaped_category = curl_easy_escape(curl, category, 0);
         if (!escaped_category) {
             ERR("Failed to escape category");
@@ -1663,6 +1953,18 @@ int set_category(CURL *curl, const char *category)
 /* ================= SET TAGS ================= */
 int set_tags(CURL *curl,const char *tags_str)
 {
+/**
+ * set_tags(curl, tags_str)
+ *
+ * Sets tags for the currently selected torrent.
+ * - Tags string can be comma-separated
+ * - Sends POST request to /api/v2/torrents/setTags
+ *
+ * @curl: CURL handle
+ * @tags_str: Tags string
+ * Returns EXIT_OK on success, EXIT_BAD_ARGS on invalid input,
+ * EXIT_SET_FAIL on failure.
+*/
     if(!curl) {
         ERR("CURL handle is NULL");
         return EXIT_BAD_ARGS;
@@ -1704,9 +2006,20 @@ int set_tags(CURL *curl,const char *tags_str)
     return EXIT_OK;
 }
 
-/* ================= SET SUPERSEED ================= */
 int set_superseed(CURL *curl,const char *val)
 {
+/**
+ * set_superseed(curl, val)
+ *
+ * Enables or disables superseeding mode for the currently selected torrent.
+ * - Accepts "0"/"1" (raw=0) or "true"/"false" (raw=1)
+ * - Sends POST request to /api/v2/torrents/setSuperSeeding
+ *
+ * @curl: CURL handle
+ * @val: Boolean-like string
+ * Returns EXIT_OK on success, EXIT_BAD_ARGS on invalid input,
+ * EXIT_SET_FAIL on failure.
+*/
     if(!curl || !val || !creds.qbt_hash[0]) {
         ERR("Invalid arguments");
         return EXIT_BAD_ARGS;
@@ -1737,9 +2050,20 @@ int set_superseed(CURL *curl,const char *val)
     return EXIT_OK;
 }
 
-/* ================= SET AUTOTMM ================= */
 int set_autotmm(CURL *curl,const char *val)
 {
+/**
+ * set_autotmm(curl, val)
+ *
+ * Enables or disables automatic torrent management (TMM) for the currently selected torrent.
+ * - Accepts "0"/"1" (raw=0) or "true"/"false" (raw=1)
+ * - Sends POST request to /api/v2/torrents/setAutoManagement
+ *
+ * @curl: CURL handle
+ * @val: Boolean-like string
+ * Returns EXIT_OK on success, EXIT_BAD_ARGS on invalid input,
+ * EXIT_SET_FAIL on failure.
+*/
     if(!curl || !val || !creds.qbt_hash[0]) {
         ERR("Invalid arguments");
         return EXIT_BAD_ARGS;
@@ -1770,9 +2094,20 @@ int set_autotmm(CURL *curl,const char *val)
     return EXIT_OK;
 }
 
-/* ================= SET SEQUENTIAL DOWNLOAD ================= */
 int set_seqdl(CURL *curl, const char *val)
 {
+/**
+ * set_seqdl(curl, val)
+ *
+ * Enables or disables sequential download for the currently selected torrent.
+ * - Accepts "0"/"1" (raw=0) or "true"/"false" (raw=1)
+ * - Sends POST request to /api/v2/torrents/toggleSequentialDownload
+ *
+ * @curl: CURL handle
+ * @val: Boolean-like string
+ * Returns EXIT_OK on success, EXIT_BAD_ARGS on invalid input,
+ * EXIT_FETCH_FAIL or EXIT_SET_FAIL on failure.
+*/
     if (!curl || !val || !creds.qbt_hash[0]) {
         ERR("Invalid arguments");
         return EXIT_BAD_ARGS;
@@ -1816,10 +2151,23 @@ int set_seqdl(CURL *curl, const char *val)
     }
     return EXIT_OK;
 }
-/* !================ ACTIONS ================! */
-/*action helper*/
+
+/* ================= ACTION HELPER FUNCTIONS ================= */
 static int qbt_action(CURL *curl, const char *endpoint, const char *post)
 {
+/**
+ * qbt_action(curl, endpoint, post)
+ *
+ * Helper function to perform a POST action on a specific torrent.
+ * - Constructs POST data with the selected torrent hash
+ * - Sends request to the given endpoint
+ *
+ * @curl: CURL handle
+ * @endpoint: API endpoint (e.g., "/api/v2/torrents/start")
+ * @post: Optional additional POST parameters
+ * Returns EXIT_OK on success, EXIT_BAD_ARGS if invalid input,
+ * EXIT_ACTION_FAIL on request failure.
+*/
     if (!curl || !creds.qbt_hash[0]) {
         ERR("qbt_action: invalid arguments");
         return EXIT_BAD_ARGS;
@@ -1856,24 +2204,66 @@ static int qbt_action(CURL *curl, const char *endpoint, const char *post)
 
     return EXIT_OK;
 }
+
+/* ================= ACTION FUNCTIONS ================= */
 int pause_torrent(CURL *curl)
 {
+/**
+ * pause_torrent(curl)
+ *
+ * Pauses/Stops the currently selected torrent.
+ * - Uses qbt_action to call /api/v2/torrents/stop
+ *
+ * @curl: CURL handle
+ * Returns EXIT_OK on success, EXIT_BAD_ARGS or EXIT_ACTION_FAIL on failure.
+*/
     int rc = qbt_action(curl, "/api/v2/torrents/stop", NULL);
     return rc;
 }
 
 int start_torrent(CURL *curl)
 {
+/**
+ * start_torrent(curl)
+ *
+ * Starts the currently selected torrent.
+ * - Uses qbt_action to call /api/v2/torrents/start
+ *
+ * @curl: CURL handle
+ * Returns EXIT_OK on success, EXIT_BAD_ARGS or EXIT_ACTION_FAIL on failure.
+*/
     int rc = qbt_action(curl, "/api/v2/torrents/start", NULL);
     return rc;
 }
+
 int force_start_torrent(CURL *curl)
 {
-   int rc = qbt_action(curl, "/api/v2/torrents/setForceStart", "value=true");
+/**
+ * force_start_torrent(curl)
+ *
+ * Enables force-start mode for the currently selected torrent.
+ * - Uses qbt_action to call /api/v2/torrents/setForceStart
+ *
+ * @curl: CURL handle
+ * Returns EXIT_OK on success, EXIT_BAD_ARGS or EXIT_ACTION_FAIL on failure.
+*/
+    int rc = qbt_action(curl, "/api/v2/torrents/setForceStart", "value=true");
    return rc;
 }
+
 int move_torrent(CURL *curl, const char *path)
 {
+/**
+ * move_torrent(curl, path)
+ *
+ * Moves the currently selected torrent to a new location.
+ * - Sends POST request to /api/v2/torrents/setLocation
+ *
+ * @curl: CURL handle
+ * @path: Destination path
+ * Returns EXIT_OK on success, EXIT_BAD_ARGS on invalid input,
+ * EXIT_ACTION_FAIL on request failure.
+*/
     if (!curl || !path || !path[0]) {
         ERR("move_torrent: invalid path");
         return EXIT_BAD_ARGS;
@@ -1898,6 +2288,18 @@ int move_torrent(CURL *curl, const char *path)
 
 static int stop_and_remove_torrent(CURL *curl, bool delete_files)
 {
+/**
+ * stop_and_remove_torrent(curl, delete_files)
+ *
+ * Stops and optionally removes the currently selected torrent.
+ * - Resolves short hash if necessary
+ * - Sends POST request to /api/v2/torrents/delete
+ *
+ * @curl: CURL handle
+ * @delete_files: true to remove torrent files, false to keep
+ * Returns EXIT_OK on success, EXIT_BAD_ARGS on invalid input,
+ * EXIT_ACTION_FAIL on request failure.
+*/
     if (!curl || !creds.qbt_hash[0]) {
         ERR("stop_and_remove_torrent: invalid arguments");
         return EXIT_BAD_ARGS;
@@ -1928,10 +2330,21 @@ static int stop_and_remove_torrent(CURL *curl, bool delete_files)
     return EXIT_OK;
 }
 
-// Add a .torrent file using an existing CURL handle
-
 static int add_torrent(CURL *curl, const char *input)
 {
+/**
+ * add_torrent(curl, input)
+ *
+ * Adds a new torrent by .torrent file or magnet link.
+ * - Performs a pre-check for existing torrents to detect the new hash
+ * - Uses curl_mime to POST torrent file or magnet URL
+ * - Polls /api/v2/torrents/info to confirm addition
+ *
+ * @curl: CURL handle
+ * @input: File path to .torrent or magnet link
+ * Returns EXIT_OK on success, EXIT_BAD_ARGS on invalid input
+ * EXIT_ACTION_FAIL or EXIT_FETCH_FAIL on failure.
+*/
     if (!curl || !input || !input[0]) {
         ERR("add_torrent: invalid arguments");
         return EXIT_BAD_ARGS;
@@ -2094,11 +2507,21 @@ static int add_torrent(CURL *curl, const char *input)
     ERR("Could not detect new torrent");
     return EXIT_FETCH_FAIL;
 }
-/* !================ Live Watch ================! */
 
-// helper to format ETA as DD:HH:MM
+/* ================= WATCH FUNCTIONS ================= */
+
 static void format_eta(char *buf, size_t len, long long seconds)
 {
+/**
+ * format_eta(buf, len, seconds)
+ *
+ * Converts seconds into a human-readable ETA string in the format DD:HH:MM.
+ * - If seconds <= 0 or >= 100 days, outputs "00:00:00".
+ *
+ * @buf: Buffer to write formatted string
+ * @len: Length of the buffer
+ * @seconds: Time in seconds
+*/
     if(seconds <= 0 || seconds >= 8640000) // >= 100 days = ∞
     {
         snprintf(buf, len, "00:00:00");
@@ -2115,6 +2538,18 @@ static void format_eta(char *buf, size_t len, long long seconds)
 
 int watch_all_torrents(CURL *curl)
 {
+/**
+ * watch_all_torrents(curl)
+ *
+ * Continuously monitors all torrents and prints a formatted live table:
+ * - Fetches torrent info via /api/v2/torrents/info
+ * - Sorts torrents by download speed descending
+ * - Displays Name, Hash, Size, Progress, ETA, DL/UL speed, downloaded/uploaded bytes, Tags, Category, State
+ * - Updates every 2 seconds until interrupted
+ *
+ * @curl: CURL handle
+ * Returns 1 on success, 0 if fetching data fails or curl is NULL.
+*/
     if(!curl) return 0;
 
     while (1)
@@ -2291,26 +2726,17 @@ int watch_all_torrents(CURL *curl)
 
     return 1;
 }
-/* ================= OPTIONAL HTTPS (todo)SUPPORT ================= */
- static void configure_https_if_needed(CURL *curl)
- {
-     if (!curl)
-         return;
-     if (strncmp(creds.qbt_url, "https://", 8) == 0) {
-         /* Enable strict SSL verification */
-         curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
-         curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
-         /* Optional: safer defaults */
-         curl_easy_setopt(curl, CURLOPT_USE_SSL, CURLUSESSL_ALL);
-         /* Optional timeouts (hardening) */
-         curl_easy_setopt(curl, CURLOPT_TIMEOUT, 15L);
-         curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 5L);
-     }
- }
 
- static int is_no_auth_mode(void)
+static int is_no_auth_mode(void)
  {
-
+/**
+ * is_no_auth_mode()
+ *
+ * Checks if qBittorrent is operating in no-auth mode.
+ * - Returns true if both username and password are empty strings.
+ *
+ * Returns 1 if no-auth mode, 0 otherwise.
+*/
      return (creds.qbt_user[0] == '\0' &&
      creds.qbt_pass[0] == '\0');
  }
@@ -2319,6 +2745,35 @@ int watch_all_torrents(CURL *curl)
 
 int main(int argc, char **argv)
 {
+/**
+ * main(argc, argv)
+ *
+ * Entry point for the qbtctl CLI application.
+ * - Parses command-line arguments for version, help, and torrent commands.
+ * - Initializes authentication credentials and CURL session.
+ * - Resolves and validates torrent hashes when required.
+ * - Executes requested actions, getters, setters, or live watch.
+ * - Cleans up CURL resources and exits with appropriate status code.
+ *
+ * Command-line options include:
+ *   - Version/Help: -v/--version, -help/--help
+ *   - Raw mode: -r/--raw
+ *   - Torrent add: -add/--add (file_or_magnet)
+ *   - Show all torrents: -a/--show-all, -aj/--show-all-json, -ac/--show-all-clean
+ *   - Show single torrent: -s/--show-single, -sj/--show-single-json
+ *   - Getters: -gn/--get-name, -gt/--get-tags, -gc/--get-category, ...
+ *   - Setters: -sc/--set-category, -st/--set-tags, -sul/--set-up-limit, ...
+ *   - Actions: -as/--start, -ap/--pause, -af/--force-start, -am/--move, -ar/--remove, -del/--delete, -w/--watch
+ *
+ * @argc: Number of command-line arguments
+ * @argv: Array of argument strings
+ *
+ * Returns:
+ *   EXIT_OK          - All requested actions completed successfully
+ *   EXIT_BAD_ARGS    - Invalid or missing arguments
+ *   EXIT_FETCH_FAIL  - Failed to fetch torrent info or resolve hash
+ *   Other EXIT codes from individual actions or authentication failures
+*/
     if(argc > 1)
     {
         for(int i = 1; i < argc; i++)
@@ -2343,7 +2798,6 @@ int main(int argc, char **argv)
     }
 
     /* =========== CHECK AUTH / SET CREDS ============== */
-
     int rc = init_auth(argc, argv);
     if (rc != EXIT_OK) {
         ERR("Authentication initialization failed. ERROR CODE: [%d]",rc);
@@ -2422,9 +2876,6 @@ int main(int argc, char **argv)
 
     if (!curl) return EXIT_FETCH_FAIL;
 
-    /* Enable HTTPS automatically if URL starts with https:// */
-    configure_https_if_needed(curl);
-
     curl_easy_setopt(curl, CURLOPT_COOKIEFILE, "");
     curl_easy_setopt(curl, CURLOPT_COOKIEJAR, "");
 
@@ -2436,7 +2887,7 @@ int main(int argc, char **argv)
         return rc;
       }
     }
- /* =============== RESOLVE AND VALIDATE SHORT HASH ============= */
+    /* =============== RESOLVE AND VALIDATE SHORT HASH ============= */
     if ((need_single_hash) && !use_add_hash) {
 
         if (strlen(creds.qbt_hash) == 0) {
@@ -2725,7 +3176,6 @@ int main(int argc, char **argv)
 
     curl_easy_cleanup(curl);
     curl_global_cleanup();
-
 
     if (!did_action) {
         printf("No command specified. Use qbtctl --help\n");

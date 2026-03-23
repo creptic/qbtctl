@@ -5,8 +5,8 @@
  *          Provides command-line guidance, usage examples, and
  *          argument parsing assistance for users.
  *
- * Version: 1.4.7
- * Date:    2026-03-20
+ * Version: 1.5.0
+ * Date:    2026-03-23
  *
  * Features:
  *   - Declares functions to display help messages
@@ -16,7 +16,7 @@
  *
  * Author:  Creptic
  * GitHub:  https://github.com/creptic/qbtctl
- */
+*/
 
 #ifndef HELP_H
 #define HELP_H

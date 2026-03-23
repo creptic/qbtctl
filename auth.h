@@ -5,8 +5,8 @@
  *          for the qbtctl CLI. Provides secure handling of credentials
  *          for qBittorrent Web API access.
  *
- * Version: 1.4.7
- * Date:    2026-03-20
+ * Version: 1.5.0
+ * Date:    2026-03-23
  *
  * Features:
  *   - Defines authentication structs for username/password storage
@@ -16,7 +16,7 @@
  *
  * Author:  Creptic
  * GitHub:  https://github.com/creptic/qbtctl
- */
+*/
 
 #ifndef AUTH_H
 #define AUTH_H
