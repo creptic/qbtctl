@@ -132,7 +132,7 @@ You may override credentials when running commands:
 # 💡 Usage Examples
 These examples assume you have already set up credentials with `./qbtctl --setup`.
 
-## 1. Watch all torrents
+## 1. Watch all torrents (requires a tty, may spam in some terminals)
 
 ```bash
 ./qbtctl -w
