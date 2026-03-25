@@ -77,6 +77,7 @@ static int term_supports_ansi(void)
 
     // Otherwise, fallback to false
     return 0;
+}
 
 static void format_ddhhmm(char *buf, size_t len, long long seconds)
 {
