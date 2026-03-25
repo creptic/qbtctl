@@ -54,29 +54,36 @@ static int term_supports_ansi(void)
  * Returns:
  *  1 if ANSI features are supported, 0 otherwise.
 */
-    if(!isatty(fileno(stdout)))
-        return 0;  // Not a TTY
+/**
+ * @brief Detect if stdout is a terminal that supports ANSI escape sequences.
+ *
+ * Returns 1 if stdout is a TTY and the terminal is likely capable of ANSI
+ * sequences (not dumb/unknown, NO_COLOR not set). Returns 0 otherwise.
+ *
+ * Uses a combination of isatty(), TERM environment, and NO_COLOR override.
+ */
+    // must be a TTY
+    if (!isatty(fileno(stdout))) return 0;
 
     const char *term = getenv("TERM");
-    const char *colorterm = getenv("COLORTERM");
     const char *no_color = getenv("NO_COLOR");
 
-    if(no_color)
-        return 0;
+    // user disabled ANSI explicitly
+    if (no_color) return 0;
 
-    if(!term || strcmp(term,"dumb")==0 || strcmp(term,"unknown")==0 || strcmp(term,"cons25")==0)
-        return 0;
+    // if TERM is unset or dumb/unknown, assume no ANSI
+    if (!term) return 0;
+    if (strcmp(term, "dumb") == 0 || strcmp(term, "unknown") == 0) return 0;
 
-    // Consider common modern terminals as ANSI compatible
-    if(strstr(term,"xterm") || strstr(term,"screen") || strstr(term,"tmux") || strstr(term,"rxvt"))
-        return 1;
+    // optionally, allow explicitly
+    if (strncmp(term, "xterm", 5) == 0) return 1;
+    if (strncmp(term, "screen", 6) == 0) return 1;
+    if (strncmp(term, "tmux", 4) == 0) return 1;
+    if (strncmp(term, "linux", 5) == 0) return 1;
+    if (strncmp(term, "vt", 2) == 0) return 1;
 
-    // COLORTERM is an extra hint
-    if(colorterm && (strcmp(colorterm,"truecolor")==0 || strcmp(colorterm,"24bit")==0))
-        return 1;
-
-    // Otherwise, fallback to false
-    return 0;
+    // fallback: assume ANSI for any TERM not dumb/unknown
+    return 1;
 }
 
 static void format_ddhhmm(char *buf, size_t len, long long seconds)
