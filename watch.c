@@ -62,28 +62,48 @@ static int term_supports_ansi(void)
  *
  * Uses a combination of isatty(), TERM environment, and NO_COLOR override.
  */
-    // must be a TTY
-    if (!isatty(fileno(stdout))) return 0;
+/**
+ * @brief Check if the current stdout terminal supports ANSI sequences.
+ *
+ * Prints debug info if debug flag is set.
+ *
+ * @param debug  If non-zero, prints TERM, NO_COLOR, TTY status and decision.
+ * @return 1 if ANSI supported, 0 otherwise
+ */
 
+    int is_tty = isatty(fileno(stdout));
     const char *term = getenv("TERM");
     const char *no_color = getenv("NO_COLOR");
 
-    // user disabled ANSI explicitly
-    if (no_color) return 0;
+    int ansi = 0;
 
-    // if TERM is unset or dumb/unknown, assume no ANSI
-    if (!term) return 0;
-    if (strcmp(term, "dumb") == 0 || strcmp(term, "unknown") == 0) return 0;
+    if (!is_tty) {
+        ansi = 0;
+    } else if (no_color) {
+        ansi = 0;
+    } else if (!term) {
+        ansi = 0;
+    } else if (strcmp(term, "dumb") == 0 || strcmp(term, "unknown") == 0) {
+        ansi = 0;
+    } else {
+        // optionally whitelist common terminals
+        if (strncmp(term, "xterm", 5) == 0) ansi = 1;
+        else if (strncmp(term, "screen", 6) == 0) ansi = 1;
+        else if (strncmp(term, "tmux", 4) == 0) ansi = 1;
+        else if (strncmp(term, "linux", 5) == 0) ansi = 1;
+        else if (strncmp(term, "vt", 2) == 0) ansi = 1;
+        else ansi = 1; // fallback for other unknown but non-dumb terminals
+    }
 
-    // optionally, allow explicitly
-    if (strncmp(term, "xterm", 5) == 0) return 1;
-    if (strncmp(term, "screen", 6) == 0) return 1;
-    if (strncmp(term, "tmux", 4) == 0) return 1;
-    if (strncmp(term, "linux", 5) == 0) return 1;
-    if (strncmp(term, "vt", 2) == 0) return 1;
 
-    // fallback: assume ANSI for any TERM not dumb/unknown
-    return 1;
+        printf("[DEBUG] TERM='%s', NO_COLOR='%s', isatty=%d -> ANSI=%d\n",
+               term ? term : "(null)",
+               no_color ? no_color : "(null)",
+               is_tty,
+               ansi);
+
+    return ansi;
+exit(0);
 }
 
 static void format_ddhhmm(char *buf, size_t len, long long seconds)
@@ -197,6 +217,7 @@ int watch_all_torrents(CURL *curl)
     if(!curl) return 0;
 
     int has_ansi = term_supports_ansi();
+    exit (0);
     if(has_ansi) {
         printf("\033[2J\033[H");;
     }
