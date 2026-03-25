@@ -427,22 +427,35 @@ Always check $? immediately after a command for accurate results.
 Run this inside the source directory:
 
 ```bash
-docker run --rm -v $(pwd):/out alpine:latest /bin/sh -c "
-apk add --no-cache build-base musl-dev zlib-static pkgconf wget tar libsodium-dev libsodium-static &&
-cd /tmp &&
-wget https://curl.se/download/curl-8.17.0.tar.gz &&
-tar xzf curl-8.17.0.tar.gz &&
-cd curl-8.17.0 &&
+docker run --rm -v "$(pwd)":/out alpine:latest /bin/sh -c "
+set -e
+
+# Install build dependencies
+apk add --no-cache build-base musl-dev zlib-static pkgconf wget tar libsodium-dev libsodium-static
+
+# Build curl statically
+cd /tmp
+wget -q https://curl.se/download/curl-8.17.0.tar.gz
+tar xzf curl-8.17.0.tar.gz
+cd curl-8.17.0
 ./configure --disable-shared --enable-static --without-ssl --disable-ntlm --disable-ldap --disable-ldaps \
             --disable-ftp --disable-file --disable-dict --disable-telnet --disable-pop3 --disable-imap \
-            --disable-smtp --disable-gopher --disable-manual --disable-psl --without-libpsl &&
-make -j$(nproc) &&
-cd /out &&
+            --disable-smtp --disable-gopher --disable-manual --disable-psl --without-libpsl
+make -j\$(nproc)
+
+# Compile all qbtctl sources statically
+cd /out
 gcc -O2 -static -s \
 -I/tmp/curl-8.17.0/include \
 -L/tmp/curl-8.17.0/lib/.libs \
--o qbtctl *.c \
+-o qbtctl qbtctl.c watch.c cJSON.c auth.c help.c \
 -lcurl -lsodium -lz -lm -ldl -lpthread
+
+# Set ownership to host user
+chown $(id -u):$(id -g) /out/qbtctl
+
+# Cleanup temp files
+rm -rf /tmp/curl-8.17.0 /tmp/curl-8.17.0.tar.gz
 "
 ```
 ---
