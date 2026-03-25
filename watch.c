@@ -52,30 +52,31 @@ static int term_supports_ansi(void)
  * - NO_COLOR must not be set
  *
  * Returns:
- *   1 if ANSI features are supported, 0 otherwise.
+ *  1 if ANSI features are supported, 0 otherwise.
 */
+    if(!isatty(fileno(stdout)))
+        return 0;  // Not a TTY
+
     const char *term = getenv("TERM");
+    const char *colorterm = getenv("COLORTERM");
     const char *no_color = getenv("NO_COLOR");
 
-    // must be a TTY
-    if(!isatty(fileno(stdout)))
-        return 0;
-
-    // user explicitly disabled color/ansi
     if(no_color)
         return 0;
 
-    // no TERM = assume dumb
-    if(!term)
+    if(!term || strcmp(term,"dumb")==0 || strcmp(term,"unknown")==0 || strcmp(term,"cons25")==0)
         return 0;
 
-    // explicitly dumb terminals
-    if(strcmp(term, "dumb") == 0 ||
-        strcmp(term, "unknown") == 0)
-        return 0;
+    // Consider common modern terminals as ANSI compatible
+    if(strstr(term,"xterm") || strstr(term,"screen") || strstr(term,"tmux") || strstr(term,"rxvt"))
+        return 1;
 
-    return 1;
-}
+    // COLORTERM is an extra hint
+    if(colorterm && (strcmp(colorterm,"truecolor")==0 || strcmp(colorterm,"24bit")==0))
+        return 1;
+
+    // Otherwise, fallback to false
+    return 0;
 
 static void format_ddhhmm(char *buf, size_t len, long long seconds)
 {
