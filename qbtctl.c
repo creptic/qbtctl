@@ -24,6 +24,7 @@
  */
 #include "help.h"
 #include "auth.h"
+#include "watch.h"
 #include "cJSON.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -50,7 +51,6 @@ void show_help(void);
 
 #define QBT_MAX_HASHES 1024
 /* QBT_MAX_HASHES - Maximum number of torrent hashes to track.*/
-
 
 #define EXIT_OK             0
 #define EXIT_LOGIN_FAIL     1
@@ -82,6 +82,8 @@ int show_json = 0;
 int show_all_json = 0;
 int raw = 0;
 bool if_watch = false;
+
+
 
 void show_version(void)
 {
@@ -2508,224 +2510,7 @@ static int add_torrent(CURL *curl, const char *input)
     return EXIT_FETCH_FAIL;
 }
 
-/* ================= WATCH FUNCTIONS ================= */
 
-static void format_eta(char *buf, size_t len, long long seconds)
-{
-/**
- * format_eta(buf, len, seconds)
- *
- * Converts seconds into a human-readable ETA string in the format DD:HH:MM.
- * - If seconds <= 0 or >= 100 days, outputs "00:00:00".
- *
- * @buf: Buffer to write formatted string
- * @len: Length of the buffer
- * @seconds: Time in seconds
-*/
-    if(seconds <= 0 || seconds >= 8640000) // >= 100 days = ∞
-    {
-        snprintf(buf, len, "00:00:00");
-        return;
-    }
-    long long days = seconds / 86400;
-    seconds %= 86400;
-    long long hours = seconds / 3600;
-    seconds %= 3600;
-    long long mins = seconds / 60;
-
-    snprintf(buf,len,"%02lld:%02lld:%02lld",days,hours,mins);
-}
-
-int watch_all_torrents(CURL *curl)
-{
-/**
- * watch_all_torrents(curl)
- *
- * Continuously monitors all torrents and prints a formatted live table:
- * - Fetches torrent info via /api/v2/torrents/info
- * - Sorts torrents by download speed descending
- * - Displays Name, Hash, Size, Progress, ETA, DL/UL speed, downloaded/uploaded bytes, Tags, Category, State
- * - Updates every 2 seconds until interrupted
- *
- * @curl: CURL handle
- * Returns 1 on success, 0 if fetching data fails or curl is NULL.
-*/
-    if(!curl) return 0;
-
-    while (1)
-    {
-        printf("\033[2J");
-        printf("\033[H");
-
-        char url[512];
-        snprintf(url,sizeof(url),"%s/api/v2/torrents/info",creds.qbt_url);
-
-        char *json = qbt_get_json(curl,url);
-        if(!json) return 0;
-
-        cJSON *root = cJSON_Parse(json);
-        free(json);
-        if(!root || !cJSON_IsArray(root))
-        {
-            if(root) cJSON_Delete(root);
-            return 0;
-        }
-
-        int count = cJSON_GetArraySize(root);
-        if(count <= 0)
-        {
-            cJSON_Delete(root);
-            printf("No torrents\n");
-            sleep(5);
-            continue;
-        }
-
-        // ---- temp arrays ----
-        const char *names[count], *states[count], *tags[count], *categories[count], *hashes[count];
-        long long sizes[count], dls[count], uls[count], etas[count], uploaded[count], downloaded[count];
-        double progs[count];
-
-        long long total_dl = 0;
-        long long total_ul = 0;
-        int active_torrents = 0;
-
-        for(int i=0;i<count;i++)
-        {
-            cJSON *obj = cJSON_GetArrayItem(root,i);
-            cJSON *item;
-
-            names[i] = "";
-            states[i] = "";
-            tags[i] = "";
-            categories[i] = "";
-            hashes[i] = "";
-            sizes[i] = dls[i] = uls[i] = etas[i] = uploaded[i] = downloaded[i] = 0;
-            progs[i] = 0;
-
-            item = cJSON_GetObjectItem(obj,"name");
-            if(cJSON_IsString(item)) names[i] = item->valuestring;
-
-            item = cJSON_GetObjectItem(obj,"state");
-            if(cJSON_IsString(item)) states[i] = item->valuestring;
-
-            item = cJSON_GetObjectItem(obj,"tags");
-            if(cJSON_IsString(item)) tags[i] = item->valuestring;
-
-            item = cJSON_GetObjectItem(obj,"category");
-            if(cJSON_IsString(item)) categories[i] = item->valuestring;
-
-            item = cJSON_GetObjectItem(obj,"hash");
-            if(cJSON_IsString(item)) hashes[i] = item->valuestring;
-
-            item = cJSON_GetObjectItem(obj,"total_size");
-            if(cJSON_IsNumber(item)) sizes[i] = (long long)item->valuedouble;
-
-            item = cJSON_GetObjectItem(obj,"progress");
-            if(cJSON_IsNumber(item)) progs[i] = item->valuedouble;
-
-            item = cJSON_GetObjectItem(obj,"eta");
-            if(cJSON_IsNumber(item)) etas[i] = (long long)item->valuedouble;
-
-            item = cJSON_GetObjectItem(obj,"dlspeed");
-            if(cJSON_IsNumber(item)) dls[i] = (long long)item->valuedouble;
-
-            item = cJSON_GetObjectItem(obj,"upspeed");
-            if(cJSON_IsNumber(item)) uls[i] = (long long)item->valuedouble;
-
-            item = cJSON_GetObjectItem(obj,"downloaded");
-            if(cJSON_IsNumber(item)) downloaded[i] = (long long)item->valuedouble;
-
-            item = cJSON_GetObjectItem(obj,"uploaded");
-            if(cJSON_IsNumber(item)) uploaded[i] = (long long)item->valuedouble;
-
-            total_dl += dls[i];
-            total_ul += uls[i];
-
-            if(strcmp(states[i],"downloading")==0 || strcmp(states[i],"uploading")==0)
-                active_torrents++;
-        }
-
-        // ---- sort by DL speed descending ----
-        for(int i=0;i<count-1;i++)
-        {
-            for(int j=i+1;j<count;j++)
-            {
-                if(dls[i] < dls[j])
-                {
-                    const char *tmp_s;
-                    long long tmp_ll;
-                    double tmp_d;
-
-                    tmp_s = names[i]; names[i]=names[j]; names[j]=tmp_s;
-                    tmp_s = states[i]; states[i]=states[j]; states[j]=tmp_s;
-                    tmp_s = tags[i]; tags[i]=tags[j]; tags[j]=tmp_s;
-                    tmp_s = categories[i]; categories[i]=categories[j]; categories[j]=tmp_s;
-                    tmp_s = hashes[i]; hashes[i]=hashes[j]; hashes[j]=tmp_s;
-
-                    tmp_ll = sizes[i]; sizes[i]=sizes[j]; sizes[j]=tmp_ll;
-                    tmp_ll = dls[i]; dls[i]=dls[j]; dls[j]=tmp_ll;
-                    tmp_ll = uls[i]; uls[i]=uls[j]; uls[j]=tmp_ll;
-                    tmp_ll = etas[i]; etas[i]=etas[j]; etas[j]=tmp_ll;
-                    tmp_ll = uploaded[i]; uploaded[i]=uploaded[j]; uploaded[j]=tmp_ll;
-                    tmp_ll = downloaded[i]; downloaded[i]=downloaded[j]; downloaded[j]=tmp_ll;
-
-                    tmp_d = progs[i]; progs[i]=progs[j]; progs[j]=tmp_d;
-                }
-            }
-        }
-
-        char total_dl_buf[32], total_ul_buf[32];
-        fmt_bytes(total_dl_buf,sizeof(total_dl_buf),total_dl);
-        fmt_bytes(total_ul_buf,sizeof(total_ul_buf),total_ul);
-
-        printf("\n Active torrents: %d | Total DL: %s | Total UL: %s\n\n",
-               active_torrents,total_dl_buf,total_ul_buf);
-
-        // ---- header ----
-        printf("+-------------------------------------+--------+----------+------+----------+----------+----------+----------+----------+--------------------+--------------+-----------+\n");
-        printf("| %-35s | %-6s | %8s | %4s | %8s | %8s | %8s | %8s | %8s | %-18s | %-12s | %-10s|\n",
-               " Name","Hash","Size","Prog","ETA","DL","UL","Download","Upload","Tags","Category","State");
-
-        printf("+-------------------------------------+--------+----------+------+----------+----------+----------+----------+----------+--------------------+--------------+-----------+\n");
-
-        for(int i=0;i<count;i++)
-        {
-            char size_buf[32], dl_buf[32], ul_buf[32], downloaded_buf[32], uploaded_buf[32], eta_buf[16], prog_buf[16];
-
-            fmt_bytes(size_buf,sizeof(size_buf),sizes[i]);
-            fmt_bytes(dl_buf,sizeof(dl_buf),dls[i]);
-            fmt_bytes(ul_buf,sizeof(ul_buf),uls[i]);
-            fmt_bytes(downloaded_buf,sizeof(downloaded_buf),downloaded[i]);
-            fmt_bytes(uploaded_buf,sizeof(uploaded_buf),uploaded[i]);
-
-            snprintf(prog_buf,sizeof(prog_buf),"%.0f%%",progs[i]*100.0);
-            format_eta(eta_buf,sizeof(eta_buf),etas[i]);
-
-            printf("| %-35.35s | %-6.6s | %8s | %4s | %8s | %8s | %8s | %8s | %8s | %-18.18s | %-12.12s | %-10.10s|\n",
-                   names[i],
-                   hashes[i],
-                   size_buf,
-                   prog_buf,
-                   eta_buf,
-                   dl_buf,
-                   ul_buf,
-                   downloaded_buf,
-                   uploaded_buf,
-                   tags[i],
-                   categories[i],
-                   states[i]);
-        }
-
-        printf("+-------------------------------------+--------+----------+------+----------+----------+----------+----------+----------+--------------------+--------------+-----------+\n");
-        printf("|       Press <Ctrl>+c to quit        |\n");
-        printf("+-------------------------------------+\n");
-        cJSON_Delete(root);
-        fflush(stdout);
-        sleep(2);
-    }
-
-    return 1;
-}
 
 static int is_no_auth_mode(void)
  {
