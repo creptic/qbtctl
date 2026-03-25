@@ -44,32 +44,17 @@ static int term_supports_ansi(void)
 /**
  * term_supports_ansi()
  *
- * Detects whether stdout is an interactive ANSI-capable terminal.
- *
- * Conditions checked:
- * - stdout must be a TTY
- * - TERM must exist and not be "dumb" or "unknown"
- * - NO_COLOR must not be set
- *
- * Returns:
- *  1 if ANSI features are supported, 0 otherwise.
-*/
-/**
- * @brief Detect if stdout is a terminal that supports ANSI escape sequences.
+ * Detect if stdout is a terminal that supports ANSI escape sequences.
  *
  * Returns 1 if stdout is a TTY and the terminal is likely capable of ANSI
  * sequences (not dumb/unknown, NO_COLOR not set). Returns 0 otherwise.
  *
  * Uses a combination of isatty(), TERM environment, and NO_COLOR override.
- */
-/**
- * @brief Check if the current stdout terminal supports ANSI sequences.
  *
- * Prints debug info if debug flag is set.
+ * Check if the current stdout terminal supports ANSI sequences.
  *
- * @param debug  If non-zero, prints TERM, NO_COLOR, TTY status and decision.
- * @return 1 if ANSI supported, 0 otherwise
- */
+ * return 1 if ANSI supported, 0 otherwise
+*/
 
     int is_tty = isatty(fileno(stdout));
     const char *term = getenv("TERM");
@@ -86,7 +71,7 @@ static int term_supports_ansi(void)
     } else if (strcmp(term, "dumb") == 0 || strcmp(term, "unknown") == 0) {
         ansi = 0;
     } else {
-        // optionally whitelist common terminals
+        // whitelist common terminals
         if (strncmp(term, "xterm", 5) == 0) ansi = 1;
         else if (strncmp(term, "screen", 6) == 0) ansi = 1;
         else if (strncmp(term, "tmux", 4) == 0) ansi = 1;
@@ -95,15 +80,7 @@ static int term_supports_ansi(void)
         else ansi = 1; // fallback for other unknown but non-dumb terminals
     }
 
-
-        printf("[DEBUG] TERM='%s', NO_COLOR='%s', isatty=%d -> ANSI=%d\n",
-               term ? term : "(null)",
-               no_color ? no_color : "(null)",
-               is_tty,
-               ansi);
-
     return ansi;
-exit(0);
 }
 
 static void format_ddhhmm(char *buf, size_t len, long long seconds)
@@ -192,32 +169,31 @@ static void trunc_field(char *out, size_t width, const char *in)
 
 int watch_all_torrents(CURL *curl)
 {
-/**
- * watch_all_torrents(curl)
- *
- * Live monitoring loop for all torrents.
- *
- * Features:
- * - Fetches data from /api/v2/torrents/info
- * - Displays formatted table with:
- *     Name, Hash, Size, Progress, ETA/Seedtime,
- *     DL/UL speeds, transferred data, Tags, Category, State
- * - Dynamically adjusts column widths based on terminal size
- * - Falls back to single snapshot if no ANSI/TTY support
- *
- * Behavior:
- * - ANSI terminal → continuous refresh every 2 seconds
- * - Non-TTY / dumb terminal → prints once and exits
- *
- * @curl: Initialized CURL handle
- *
- * Returns:
- *   1 on success, 0 on failure
-*/
+    /**
+     * watch_all_torrents(curl)
+     *
+     * Live monitoring loop for all torrents.
+     *
+     * Features:
+     * - Fetches data from /api/v2/torrents/info
+     * - Displays formatted table with:
+     *     Name, Hash, Size, Progress, ETA/Seedtime,
+     *     DL/UL speeds, transferred data, Tags, Category, State
+     * - Dynamically adjusts column widths based on terminal size
+     * - Falls back to single snapshot if no ANSI/TTY support
+     *
+     * Behavior:
+     * - ANSI terminal → continuous refresh every 2 seconds
+     * - Non-TTY / dumb terminal → prints once and exits
+     *
+     * @curl: Initialized CURL handle
+     *
+     * Returns:
+     *   1 on success, 0 on failure
+     */
     if(!curl) return 0;
 
     int has_ansi = term_supports_ansi();
-    exit (0);
     if(has_ansi) {
         printf("\033[2J\033[H");;
     }
@@ -368,15 +344,15 @@ int watch_all_torrents(CURL *curl)
                    cat_w, cat_buf,
                    state_w, state_buf);
         }
-        if(has_ansi) {
-           printf("+-------------------------------------+--------+----------+------+----------+----------+----------+----------+----------+--------------------+--------------+-----------+\n");
-           printf("|       Press <Ctrl>+c to quit        |\n");
-           printf("+-------------------------------------+\n");
+        if(!has_ansi) {
+            printf("+-------------------------------------+--------+----------+------+----------+----------+----------+----------+----------+--------------------+--------------+-----------+\n");
+            printf("|       Press <Ctrl>+c to quit        |\n");
+            printf("+-------------------------------------+\n");
         } else {
-           printf("+-------------------------------------+--------+----------+------+----------+----------+----------+----------+----------+--------------------+--------------+-----------+\n");
-           printf("| No TTY detected showing single snapshot only |\n");
-           printf("+----------------------------------------------+\n");
-           break;
+            printf("+-------------------------------------+--------+----------+------+----------+----------+----------+----------+----------+--------------------+--------------+-----------+\n");
+            printf("| No TTY detected showing single snapshot only |\n");
+            printf("+----------------------------------------------+\n");
+            break;
         }
 
         cJSON_Delete(root);
