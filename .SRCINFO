@@ -1,0 +1,18 @@
+pkgbase = qbtctl
+	pkgdesc = Minimal, ultra-fast command-line interface for controlling a torrent in qBittorrent via its Web API.
+	pkgver = 1.5.0
+	pkgrel = 1
+	url = https://github.com/creptic/qbtctl
+	arch = x86_64
+	license = GPL3
+	makedepends = gcc
+	makedepends = make
+	makedepends = git
+	depends = curl
+	depends = zlib
+	depends = libsodium
+	options = !debug
+	source = https://github.com/creptic/qbtctl/archive/refs/tags/1.5.0.tar.gz
+	sha256sums = 57930ccc1cf526e1da0f76039bb578cf2f6a38a1ae016729857ae3ff8bd5cec9
+
+pkgname = qbtctl
