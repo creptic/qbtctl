@@ -38,6 +38,7 @@ Usage:
    $ qbtctl -sst 03:02:01 <hash>  # Set seeding time limit (DD:HH:MM)
 
 Notes:
+- Can also be built with makepkg -i
 - Available in aur at https://aur.archlinux.org/packages/qbtctl/
 - Live monitoring will auto-refresh if terminal supports ANSI.
 - Completed torrents or infinite seeding display as "∞".
