@@ -12,8 +12,7 @@ source=("https://github.com/creptic/qbtctl/archive/refs/tags/1.5.0.tar.gz")
 sha256sums=('SKIP')
 options=('!debug')
 build() {
-    cd "$srcdir/$pkgname"
-
+    cd "$srcdir/$pkgname-$pkgver"
     # Clean previous builds
     make clean
 
