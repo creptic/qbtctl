@@ -83,8 +83,6 @@ int show_all_json = 0;
 int raw = 0;
 bool if_watch = false;
 
-
-
 void show_version(void)
 {
 /*show_version() - Print the current qbtctl version.*/
@@ -868,7 +866,6 @@ char *get_seedtime_limit() {
     return buf;
 }
 
-
 static char *get_upspeed(void)
 {
     static char buf[64];
@@ -885,7 +882,6 @@ static char *get_upspeed(void)
     return buf;
 }
 
-
 static char *get_dlspeed(void)
 {
     static char buf[64];
@@ -901,8 +897,6 @@ static char *get_dlspeed(void)
 
     return buf;
 }
-
-
 
 static char *get_uploaded(void)
 {
