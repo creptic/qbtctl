@@ -27,8 +27,6 @@ chmod +x qbtctl
 ```
 https://github.com/creptic/qbtctl/releases/latest/download/qbtctl
 
-Install from [AUR](https://aur.archlinux.org/packages/qbtctl/) with: ``yay -S qbtctl``
-
 ## Example 
 
 Pause all torrents, set sequential download to 1 (ON), and ratio to 2.0 
@@ -56,7 +54,7 @@ Before compiling `qbtctl`, ensure your system has:
 - mbedtls (static build only) 
 - POSIX-compatible OS (Linux, macOS, etc.)
 
-Makefile and PKGBUILD are included.
+Makefile is included.
 
 Compile with: 
 
@@ -66,7 +64,6 @@ or
 make static (optional static portable build)
 make install (optional install to /usr/bin, may require sudo)
 ```
-or use PKGBUILD with ``makepkg -i``
 
 For a portable [**static build using Docker**](#static-build-using-docker), see the Docker section below.
 
