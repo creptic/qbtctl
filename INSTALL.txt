@@ -5,7 +5,7 @@ Requirements:
 - curl
 - cJSON library (included in source)
 - mbedtls (static build only)
-- libsodium
+- libsodium 
 - gcc + make (for building)
 
 Build Instructions:
