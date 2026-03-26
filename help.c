@@ -6,7 +6,7 @@
  *          instructions for users.
  *
  * Version: 1.5.0
- * Date:    2026-03-23
+ * Date:    2026-03-26
  *
  * Features:
  *   - Displays full help for all commands and options
@@ -31,7 +31,7 @@ void show_help()
     printf("--------\n");
     printf("  -help, --help        Show this help message\n");
     printf("  -i, --setup          Setup server credentials interactively (save/test auth.txt)\n");
-    printf("  -w, --watch          Watch status of all torrents in a table (refreshes) \n");
+    printf("  -w, --watch          Watch status of all torrents in a table to TTY (Experimental) \n");
     printf("  -c <path>            Alternate auth.txt path (ex: /home/user/auth.txt)\n");
     printf("  -r, --raw            Raw output mode (bytes, seconds, true/false)\n");
     printf("  --url <url>          qBittorrent WebUI URL (ex: http://localhost:8080)\n");

@@ -5,7 +5,7 @@
  *          via its Web API. Includes live torrent monitoring, sorting, and torrent info display.
  *
  * Version: 1.5.0
- * Date:    2026-03-23
+ * Date:    2026-03-26
  *
  * Features:
  *   - Set/Get a torrent settings in real time
@@ -1661,11 +1661,10 @@ int set_seedtime_limit(CURL *curl, const char *seedtime_str)
  * set_seedtime_limit(curl, seedtime_str)
  *
  * Sets the seeding time limit for the currently selected torrent.
- * - Accepts DD:HH:MM format if raw=0, numeric seconds if raw=1
+ * - Accepts DD:HH:MM format if raw=0, numeric seconds/minutes if raw=1
+ * - Converts all to minutes before sending to qBittorrent API
  * - Sends POST request to /api/v2/torrents/setShareLimits
  *
- * @curl: CURL handle
- * @seedtime_str: Seeding time string (DD:HH:MM or seconds)
  * Returns EXIT_OK on success, EXIT_BAD_ARGS on invalid input,
  * EXIT_FETCH_FAIL or EXIT_SET_FAIL on failure.
 */
@@ -1684,7 +1683,8 @@ int set_seedtime_limit(CURL *curl, const char *seedtime_str)
         return EXIT_FETCH_FAIL;
     }
 
-    long seedtime_seconds = 0;
+    long seedtime_minutes = 0;
+
     if (!raw) {
         int dd = 0, hh = 0, mm = 0;
         if (sscanf(seedtime_str, "%d:%d:%d", &dd, &hh, &mm) != 3) {
@@ -1695,20 +1695,26 @@ int set_seedtime_limit(CURL *curl, const char *seedtime_str)
             ERR("Negative values not allowed");
             return EXIT_BAD_ARGS;
         }
-        seedtime_seconds = dd*86400L + hh*3600L + mm*60L;
-    } else {
-        for (size_t i = 0; seedtime_str[i]; i++)
-        {
-            if (!isdigit((unsigned char)seedtime_str[i]))
-            {
-                ERR("Invalid numeric seedtime '%s'", seedtime_str);
-                return EXIT_BAD_ARGS;
-            }
-        }
 
-        seedtime_seconds = atol(seedtime_str);
+        // convert to total minutes
+        seedtime_minutes = dd*24*60 + hh*60 + mm;
+
+        // ensure at least 1 minute
+        if (seedtime_minutes == 0 && (dd > 0 || hh > 0 || mm > 0))
+            seedtime_minutes = 1;
+    } else {
+        // numeric input assumed to be in seconds; convert to minutes
+        long secs = atol(seedtime_str);
+        if (secs < 0) {
+            ERR("Negative numeric seedtime '%s'", seedtime_str);
+            return EXIT_BAD_ARGS;
+        }
+        seedtime_minutes = secs / 60;
+        if (secs > 0 && seedtime_minutes == 0)
+            seedtime_minutes = 1;
     }
 
+    // Escape hash
     char *escaped = curl_easy_escape(curl, creds.qbt_hash, 0);
     if (!escaped) {
         ERR("Failed to escape hash");
@@ -1718,20 +1724,20 @@ int set_seedtime_limit(CURL *curl, const char *seedtime_str)
     char postdata[512];
     if (snprintf(postdata, sizeof(postdata),
         "hashes=%s&ratioLimit=%.5f&seedingTimeLimit=%ld&inactiveSeedingTimeLimit=-1",
-        escaped, torrent.ratio_limit, seedtime_seconds) >= (int)sizeof(postdata)) {
+        escaped, torrent.ratio_limit, seedtime_minutes) >= (int)sizeof(postdata)) {
         ERR("POST buffer overflow");
-        curl_free(escaped);
-        return EXIT_SET_FAIL;
+    curl_free(escaped);
+    return EXIT_SET_FAIL;
         }
 
         curl_free(escaped);
 
-    if (!qbt_request(curl, "/api/v2/torrents/setShareLimits", postdata, NULL)) {
-        ERR("Failed to set seedtime limit");
-        return EXIT_FETCH_FAIL;
-    }
+        if (!qbt_request(curl, "/api/v2/torrents/setShareLimits", postdata, NULL)) {
+            ERR("Failed to set seedtime limit");
+            return EXIT_FETCH_FAIL;
+        }
 
-    return EXIT_OK;
+        return EXIT_OK;
 }
 
 int set_ratio_limit(CURL *curl, const char *ratio_str)

@@ -6,7 +6,7 @@
  *          for qBittorrent Web API access.
  *
  * Version: 1.5.0
- * Date:    2026-03-23
+ * Date:    2026-03-26
  *
  * Features:
  *   - Defines authentication structs for username/password storage

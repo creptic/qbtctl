@@ -5,7 +5,7 @@
  *          formatting output, and rendering a dynamic table view with auto-refresh.
  *
  * Version: 1.5.0
- * Date:    2026-03-23
+ * Date:    2026-03-26
  *
  * Features:
  *   - Fetches all torrents via /api/v2/torrents/info
@@ -83,34 +83,6 @@ static int term_supports_ansi(void)
     return ansi;
 }
 
-static void format_ddhhmm(char *buf, size_t len, long long seconds)
-{
-/**
- * format_ddhhmm(buf, len, seconds)
- *
- * Converts seconds into a DD:HH:MM formatted string.
- *
- * Rules:
- * - If seconds <= 0 or >= 100 days → "00:00:00"
- *
- * @buf: Output buffer
- * @len: Buffer size
- * @seconds: Time in seconds
-*/
-    if(seconds <= 0 || seconds >= 8640000)
-    {
-        snprintf(buf,len,"00:00:00");
-        return;
-    }
-    long long days = seconds / 86400;
-    seconds %= 86400;
-    long long hours = seconds / 3600;
-    seconds %= 3600;
-    long long mins = seconds / 60;
-
-    snprintf(buf,len,"%02lld:%02lld:%02lld",days,hours,mins);
-}
-
 static int get_terminal_width(void)
 {
 /**
@@ -164,38 +136,49 @@ static void trunc_field(char *out, size_t width, const char *in)
 
     snprintf(out, width + 1, "%.*s...", (int)(width - 3), in);
 }
+static void format_ddhhmm(char *buf, size_t len, long long seconds)
+{
+    long long mins = seconds / 60;
+    long long hrs  = mins / 60;
+    long long days = hrs / 24;
+
+    mins = mins % 60;
+    hrs  = hrs % 24;
+
+    snprintf(buf, len, "%02lld:%02lld:%02lld", days, hrs, mins);
+}
 
 /* ================== WATCH LOOP ================== */
 
 int watch_all_torrents(CURL *curl)
 {
-    /**
-     * watch_all_torrents(curl)
-     *
-     * Live monitoring loop for all torrents.
-     *
-     * Features:
-     * - Fetches data from /api/v2/torrents/info
-     * - Displays formatted table with:
-     *     Name, Hash, Size, Progress, ETA/Seedtime,
-     *     DL/UL speeds, transferred data, Tags, Category, State
-     * - Dynamically adjusts column widths based on terminal size
-     * - Falls back to single snapshot if no ANSI/TTY support
-     *
-     * Behavior:
-     * - ANSI terminal → continuous refresh every 2 seconds
-     * - Non-TTY / dumb terminal → prints once and exits
-     *
-     * @curl: Initialized CURL handle
-     *
-     * Returns:
-     *   1 on success, 0 on failure
-     */
+/**
+ * watch_all_torrents(curl)
+ *
+ * Live monitoring loop for all torrents.
+ *
+ * Features:
+ * - Fetches data from /api/v2/torrents/info
+ * - Displays formatted table with:
+ *     Name, Hash, Size, Progress, ETA/Seedtime,
+ *     DL/UL speeds, transferred data, Tags, Category, State
+ * - Dynamically adjusts column widths based on terminal size
+ * - Falls back to single snapshot if no ANSI/TTY support
+ *
+ * Behavior:
+ * - ANSI terminal → continuous refresh every 2 seconds
+ * - Non-TTY / dumb terminal → prints once and exits
+ *
+ * @curl: Initialized CURL handle
+ *
+ * Returns:
+ *   1 on success, 0 on failure
+*/
     if(!curl) return 0;
 
     int has_ansi = term_supports_ansi();
     if(has_ansi) {
-        printf("\033[2J\033[H");;
+        printf("\033[2J\033[H");
     }
     do
     {
@@ -273,7 +256,6 @@ int watch_all_torrents(CURL *curl)
             item=cJSON_GetObjectItem(obj,"upspeed"); if(cJSON_IsNumber(item)) uls[i]=(long long)item->valuedouble;
             item=cJSON_GetObjectItem(obj,"downloaded"); if(cJSON_IsNumber(item)) downloaded[i]=(long long)item->valuedouble;
             item=cJSON_GetObjectItem(obj,"uploaded"); if(cJSON_IsNumber(item)) uploaded[i]=(long long)item->valuedouble;
-            item=cJSON_GetObjectItem(obj,"seeding_time"); if(cJSON_IsNumber(item)) seedtimes[i]=(long long)item->valuedouble;
 
             total_dl += dls[i];
             total_ul += uls[i];
@@ -295,17 +277,19 @@ int watch_all_torrents(CURL *curl)
         printf("| %-*s | %-*s | %8s | %4s | %8s | %8s | %8s | %8s | %8s | %-*s | %-*s | %-*s|\n",
                name_w,"Name",
                hash_w,"Hash",
-               "Size","Prog","ETA/SEED","DL","UL","Download","Upload",
+               "Size","Prog","ETA","DL","UL","Download","Upload",
                tags_w,"Tags",
                cat_w,"Category",
                state_w,"State");
         printf("+-------------------------------------+--------+----------+------+----------+----------+----------+----------+----------+--------------------+--------------+-----------+\n");
 
 
+
         for(int i=0;i<count;i++)
         {
+
             char name_buf[128], hash_buf[16], tags_buf[32], cat_buf[32], state_buf[32];
-            char size_buf[32], dl_buf[32], ul_buf[32], downloaded_buf[32], uploaded_buf[32], eta_buf[16], prog_buf[16];
+            char size_buf[32], dl_buf[32], ul_buf[32], downloaded_buf[32], uploaded_buf[32], eta_buf[32], prog_buf[16];
 
 
             trunc_field(name_buf,  name_w,  names[i]);
@@ -324,11 +308,23 @@ int watch_all_torrents(CURL *curl)
             fmt_bytes(uploaded_buf,sizeof(uploaded_buf),uploaded[i]);
 
             snprintf(prog_buf,sizeof(prog_buf),"%.0f%%",progs[i]*100.0);
-            if(strcmp(states[i], "downloading") == 0)
+            if(strcmp(states[i], "downloading") == 0) {
                 strcpy(state_buf, "download");
-            format_ddhhmm(eta_buf,sizeof(eta_buf),etas[i]);
-            if(strcmp(eta_buf,"100:00:00")==0 || strcmp(eta_buf,"00:00:00")==0 )
-                format_ddhhmm(eta_buf,sizeof(eta_buf),seedtimes[i]);
+            }
+
+            // ETA/Seed column width
+            const int ETA_COL_WIDTH = 9;  // Adjust to match your table column
+
+            // Decide what to show in ETA column
+            if (etas[i] == 0 || etas[i] >= 8640000) {
+                // Completed or "infinite" seeding → show infinity with padding
+                int pad = (ETA_COL_WIDTH - 1) / 2; // center the ∞
+                snprintf(eta_buf, sizeof(eta_buf), "%*s∞%*s", pad, "", ETA_COL_WIDTH - pad - 2, "");
+            } else {
+                // Normal ETA in seconds → format as DD:HH:MM
+                format_ddhhmm(eta_buf, sizeof(eta_buf), etas[i]);
+            }
+
 
             printf("| %-*s | %-*s | %8s | %4s | %8s | %8s | %8s | %8s | %8s | %-*s | %-*s | %-*s|\n",
                    name_w, name_buf,
@@ -344,10 +340,11 @@ int watch_all_torrents(CURL *curl)
                    cat_w, cat_buf,
                    state_w, state_buf);
         }
-        if(!has_ansi) {
+        if(has_ansi) {
             printf("+-------------------------------------+--------+----------+------+----------+----------+----------+----------+----------+--------------------+--------------+-----------+\n");
             printf("|       Press <Ctrl>+c to quit        |\n");
             printf("+-------------------------------------+\n");
+
         } else {
             printf("+-------------------------------------+--------+----------+------+----------+----------+----------+----------+----------+--------------------+--------------+-----------+\n");
             printf("| No TTY detected showing single snapshot only |\n");
@@ -358,6 +355,10 @@ int watch_all_torrents(CURL *curl)
         cJSON_Delete(root);
         fflush(stdout);
         sleep(2);
+        if(has_ansi) {
+            printf("\033[2J\033[H");
+        }
+
 
     }while(1);
 

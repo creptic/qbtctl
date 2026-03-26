@@ -5,7 +5,7 @@
  *          Exposes the main watch loop used by the CLI.
  *
  * Version: 1.5.0
- * Date:    2026-03-23
+ * Date:    2026-03-26
  *
  * Exposed Functions:
  *   - watch_all_torrents(): Starts live monitoring loop
