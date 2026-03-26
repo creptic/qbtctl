@@ -21,7 +21,7 @@ build() {
 }
 
 package() {
-    cd "$srcdir/$pkgname"
+    cd "$srcdir/$pkgname-$pkgver"
 
     # Install dynamic binary
     install -Dm755 qbtctl "$pkgdir/usr/bin/qbtctl"
