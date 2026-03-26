@@ -14,9 +14,9 @@ It allows you to manage torrents directly from the terminal, supporting operatio
 - Monitoring torrent upload/download limits, state, and seed time  
 - Interactive authentication setup or command-line credentials  
 
-Designed to be **compact, single-binary, and portable**, making it easy to compile and deploy.
+Designed to be **compact**, making it easy to compile and deploy.
 
-Lightweight yet powerful — perfect for scripting or managing your qBittorrent instance from the terminal.
+Lightweight, fits on a floppy, yet powerful — perfect for scripting or managing your qBittorrent instance from the terminal.
 
 ## 📥 Download
 
