@@ -33,6 +33,7 @@ https://github.com/creptic/qbtctl/releases/latest/download/qbtctl
 
 Pause all torrents, set sequential download to 1 (ON), and ratio to 2.0 
 ```bash
+qbtctl=/path/qbtctl
 for h in $(qbtctl -ghl); do
     qbtctl -h $h --pause --set-seqdl 1 -srl 2.0
 done
@@ -56,13 +57,15 @@ Before compiling `qbtctl`, ensure your system has:
 
 A Makefile is included.
 
-Compile with:
+Compile with: 
 
 ```bash
 make
+make static (optional static portable build)
+make install (optional install to /usr/bin, may require sudo)
 ```
 
-For a portable [**static build**](#static-build-using-docker), see the Docker section below.
+For a portable [**static build using Docker**](#static-build-using-docker), see the Docker section below.
 
 ---
 
