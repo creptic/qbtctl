@@ -8,7 +8,7 @@ url="https://github.com/creptic/qbtctl"
 license=('GPL3')
 depends=('curl' 'zlib' 'libsodium')       # runtime deps for dynamic binary
 makedepends=('gcc' 'make' 'git')          # needed for building
-source=("git+https://github.com/creptic/qbtctl.git")
+source=("https://github.com/creptic/qbtctl/archive/refs/tags/1.5.0.tar.gz"
 sha256sums=('SKIP')
 options=('!debug')
 build() {
