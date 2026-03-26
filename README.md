@@ -136,8 +136,8 @@ You may override credentials when running commands:
 These examples assume you have already set up credentials with `./qbtctl --setup`.
 
 ## 1. Watch all torrents 
-Requires a tty, (may scroll spam in some terminals);
-
+Requires a tty, (may scroll spam in some terminals); 
+Tested and working with Konsole in Plasma.
 ```bash
 ./qbtctl -w
 ```
