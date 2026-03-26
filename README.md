@@ -136,7 +136,13 @@ You may override credentials when running commands:
 # 💡 Usage Examples
 These examples assume you have already set up credentials with `./qbtctl --setup`.
 
-## 1. Watch all torrents 
+## 1. Add a torrent file, set category to iso and show name)
+- Note: magnet link works same as file use "magnet:?xt=****"
+```bash
+./qbtctl --add torrent.file --set-category "ISO" -gn
+```
+
+## 2. Watch all torrents 
 Requires a tty, (may scroll spam in some terminals); 
 Tested and working with Konsole in Plasma.
 ```bash
@@ -161,7 +167,7 @@ Active torrents: 3 | Total DL: 28.6M | Total UL: 1.4M
 
 ```
 
-## 2. Show all torrents
+## 3. Show all torrents
 
 ```bash
 ./qbtctl -a
@@ -192,7 +198,7 @@ With raw output (bytes, seconds, true/false):
 
 ---
 
-## 3. Show single torrent info (with or without raw)
+## 4. Show single torrent info (with or without raw)
 
 ```bash
 ./qbtctl -s -h 9c3289
@@ -242,7 +248,7 @@ With raw JSON:
 
 ---
 
-## 4. Modify torrent settings
+## 5. Modify torrent settings
 
 Set category and tags:
 
@@ -264,7 +270,7 @@ Enable sequential download and superseed:
 
 ---
 
-## 5. Pause(stop), resume(start), or remove torrents
+## 6. Pause(stop), resume(start), or remove torrents
 
 Pause a torrent:
 
@@ -292,7 +298,7 @@ Delete torrent and data:
 
 ---
 
-## 6. Move torrent data
+## 7. Move torrent data
 
 ```bash
 ./qbtctl -am /downloads/linux -h 9c3289
@@ -302,21 +308,14 @@ Moves the files to `/downloads/linux` on the server.
 
 ---
 
-## 7. Quick non-interactive run
+## 8. Quick non-interactive run
 
 If you want to run commands directly with credentials:
 
 ```bash
 ./qbtctl --url http://localhost:8080 --user admin --pass mypass -a
 ```
-
 ---
-
-## 8. Add a torrent file, set category to iso and show name)
-- Note: magnet link works same as file use "magnet:?xt=****"
-```bash
-./qbtctl --add torrent.file --set-category "ISO" -gn
-```
 
 # Options
 
