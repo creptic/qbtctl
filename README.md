@@ -52,7 +52,8 @@ Before compiling `qbtctl`, ensure your system has:
 
 - **C compiler** (`cc`, `gcc`, or `clang`)
 - **libcurl** (for connecting to qbittorent api)
-- **libsodium** (for encrypting/decrypting password) 
+- **libsodium** (for encrypting/decrypting password)
+- mbedtls (static build only) 
 - POSIX-compatible OS (Linux, macOS, etc.)
 
 A Makefile is included.
