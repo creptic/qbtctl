@@ -61,6 +61,7 @@ Compile with:
 
 ```bash
 make
+or
 make static (optional static portable build)
 make install (optional install to /usr/bin, may require sudo)
 ```
