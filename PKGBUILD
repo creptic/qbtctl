@@ -1,0 +1,36 @@
+# Maintainer: Creptic <creptics@gmail.com>
+pkgname=qbtctl
+pkgver=1.5.0
+pkgrel=1
+pkgdesc="Command-line client for qBittorrent with live monitoring"
+arch=('x86_64')
+url="https://github.com/creptic/qbtctl"
+license=('GPL3')
+depends=('curl' 'zlib' 'libsodium')       # runtime deps for dynamic binary
+makedepends=('gcc' 'make' 'git')          # needed for building
+source=("git+https://github.com/creptic/qbtctl.git")
+sha256sums=('SKIP')
+options=('!debug')
+build() {
+    cd "$srcdir/$pkgname"
+
+    # Clean previous builds
+    make clean
+
+    # Build dynamic qbtctl
+    make
+}
+
+package() {
+    cd "$srcdir/$pkgname"
+
+    # Install dynamic binary
+    install -Dm755 qbtctl "$pkgdir/usr/bin/qbtctl"
+
+    # Install license
+    install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+
+    # Install documentation
+    install -Dm644 INSTALL.txt "$pkgdir/usr/share/doc/$pkgname/INSTALL.txt"
+    install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
+}
