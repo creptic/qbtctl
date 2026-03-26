@@ -6,7 +6,7 @@
  *          argument parsing assistance for users.
  *
  * Version: 1.5.0
- * Date:    2026-03-23
+ * Date:    2026-03-26
  *
  * Features:
  *   - Declares functions to display help messages
