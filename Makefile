@@ -19,7 +19,7 @@ OBJS    := $(SRCS:.c=.o)
 TARGET := qbtctl
 
 # Installation directory
-PREFIX  := /usr/local
+PREFIX  := /usr
 BINDIR  := $(PREFIX)/bin
 
 # Default target: dynamic build
