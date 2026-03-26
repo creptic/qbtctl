@@ -4,7 +4,7 @@ qbtctl 1.5.0 - Installation Instructions
 Requirements:
 - curl
 - cJSON library
-- mbedtls
+- mbedtls (static build only)
 - libsodium
 - gcc + make (for building)
 
