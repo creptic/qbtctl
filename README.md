@@ -71,9 +71,7 @@ For a portable [**static build using Docker**](#static-build-using-docker), see 
 
 ---
 
-# Compiling
-
-Clone the repository:
+# Clone make and run
 
 ```bash
 git clone https://github.com/creptic/qbtctl.git
