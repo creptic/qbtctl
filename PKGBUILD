@@ -9,7 +9,7 @@ license=('GPL3')
 depends=('curl' 'zlib' 'libsodium')       # runtime deps for dynamic binary
 makedepends=('gcc' 'make' 'git')          # needed for building
 source=("https://github.com/creptic/qbtctl/archive/refs/tags/1.5.0.tar.gz")
-sha256sums=('560fb7061c039ca3a8cbc3718a136bf7316ee830b495c4518b30f674fa9db3b5')
+sha256sums=('57930ccc1cf526e1da0f76039bb578cf2f6a38a1ae016729857ae3ff8bd5cec9 ')
 options=('!debug')
 build() {
     cd "$srcdir/$pkgname-$pkgver"
