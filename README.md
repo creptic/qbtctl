@@ -26,6 +26,7 @@ wget https://github.com/creptic/qbtctl/releases/latest/download/qbtctl
 chmod +x qbtctl
 ```
 https://github.com/creptic/qbtctl/releases/latest/download/qbtctl
+
 Install from [AUR](https://aur.archlinux.org/packages/qbtctl/) with: ``yay -S qbtctl``
 
 ## Example 
