@@ -2,7 +2,7 @@
 [![Release](https://img.shields.io/github/v/release/creptic/qbtctl)](https://github.com/creptic/qbtctl/releases)
 [![Donate](https://img.shields.io/badge/Donate-PayPal-blue.svg)](https://www.paypal.com/paypalme/crepticdev)
 ![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
-
+[![AUR Version](https://img.shields.io/aur/version/qbtctl?label=AUR)](https://aur.archlinux.org/packages/qbtctl)
 ---
 
 **qbittorrent torrent control** is a minimal, ultra-fast command-line interface for controlling a torrent in qBittorrent via its Web API.
