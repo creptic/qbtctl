@@ -87,16 +87,11 @@ Auth file search order:
 1. `~/.qbtctl/auth.txt`
 2. `./auth.txt` (inside the qbtctl directory)
 3. Custom path using `-c <path>` (overrride)
----
-
-# Interactive Setup
-
 Run:
 
 ```bash
 ./qbtctl --setup
 ```
-
 You will be prompted for:
 
 - qBittorrent URL (default: `http://localhost`)
@@ -108,20 +103,18 @@ Note: To save to program directory just type ```auth.txt``` or alternate filenam
 
 - Use full filename when saving, it will not create if pointed to a directory only.
       
-By default credentials are saved to:
-```text
-~/.qbtctl/auth.txt
-```
+By default credentials are saved to: ``~/.qbtctl/auth.txt``
+
 ---
 # 💡 Usage Examples
 These examples assume you have already set up credentials with `./qbtctl --setup`.
 
-## 1. Adding a torrent 
- * add a torrent, set sequential download on, and return name
+## 1. Adding a torrent/magnet 
+Add a torrent file, set sequential download on, and return name.
 ```bash
-qbtctl --add torrent.file --set-seqdl 1 -gn
+./qbtctl --add torrent.file --set-seqdl 1 -gn
 ```
- * add a magnet, set ratio 2.0, set seedtime to 4 days
+Add a magnet link, set ratio 2.0, set seedtime to 4 days
 ```bash
 ./qbtctl --add "magnet:?xt=urn:btih:0123456..." --set-seedtime 04:00:00
 ```
