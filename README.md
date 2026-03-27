@@ -116,7 +116,7 @@ Add a torrent file, set sequential download on, and return name.
 ```
 Add a magnet link, set ratio 2.0, set seedtime to 4 days
 ```bash
-./qbtctl --add "magnet:?xt=urn:btih:0123456..." --set-seedtime 04:00:00
+./qbtctl --add "magnet:?xt=urn:btih:0123456..." -srl 2.0 -sst 04:00:00
 ```
 
 ## 2. Watch all torrents 
