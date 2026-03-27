@@ -116,10 +116,14 @@ By default credentials are saved to:
 # 💡 Usage Examples
 These examples assume you have already set up credentials with `./qbtctl --setup`.
 
-## 1. Add a torrent file, set category to iso and show name
-- Note: magnet link works same as file use "magnet:?xt=****"
+## 1. Adding a torrent 
+ * add a torrent, set sequential download on, and return name
 ```bash
-./qbtctl --add torrent.file --set-category "ISO" -gn
+qbtctl --add torrent.file --set-seqdl 1 -gn
+```
+ * add a magnet, set ratio 2.0, set seedtime to 4 days
+```bash
+./qbtctl --add "magnet:?xt=urn:btih:0123456..." --set-seedtime 04:00:00
 ```
 
 ## 2. Watch all torrents 
@@ -326,8 +330,8 @@ If you want to run commands directly with credentials:
 -as, --start               Start torrent
 -af, --force-start         Force start torrent
 -ap, --pause               Pause or stop torrent
--ar, --remove              Stop and remove torrent (keeps data)
--del, --delete             Stop, remove, and delete torrent and data
+-ar, --remove              Remove torrent (keeps data)
+-del, --delete             Remove, and delete torrent and data
 -add <file/magnet>, --add <file/magnet> Add torrent via file or magnet link
 ```
 
@@ -399,10 +403,6 @@ fi
 Notes:
 
 These codes are returned by the CLI when commands fail.
-
-Useful for scripting and automated workflows.
-
-Always check $? immediately after a command for accurate results.
 
 ---
 
