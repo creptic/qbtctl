@@ -144,7 +144,7 @@ These examples assume you have already set up credentials with `./qbtctl --setup
 
 ## 2. Watch all torrents 
 Requires a tty, (may scroll spam in some terminals); 
-Tested and working with Konsole in Plasma.
+Tested and working with Linux TTY and Konsole in Plasma.
 ```bash
 ./qbtctl -w
 ```
