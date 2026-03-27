@@ -29,15 +29,6 @@ https://github.com/creptic/qbtctl/releases/latest/download/qbtctl
 
 Install from [AUR](https://aur.archlinux.org/packages/qbtctl/) with: ``yay -S qbtctl``
 
-## Example 
-
-Pause all torrents, set sequential download to 1 (ON), and ratio to 2.0 
-```bash
-qbtctl=/path/qbtctl
-for h in $(qbtctl -ghl); do
-    qbtctl -h $h --pause --set-seqdl 1 -srl 2.0
-done
-```
 ---
 
 ## 💡 **Quick Reference**
@@ -80,7 +71,6 @@ cd qbtctl
 make
 ./qbtctl --setup
 ```
-
 ---
 
 # Authentication Setup
@@ -123,20 +113,10 @@ By default credentials are saved to:
 ~/.qbtctl/auth.txt
 ```
 ---
-
-# Command-Line Overrides
-
-You may override credentials when running commands:
-
-```bash
-./qbtctl --url http://host:8080 --user admin --pass mypass [command]
-```
-
----
 # 💡 Usage Examples
 These examples assume you have already set up credentials with `./qbtctl --setup`.
 
-## 1. Add a torrent file, set category to iso and show name)
+## 1. Add a torrent file, set category to iso and show name
 - Note: magnet link works same as file use "magnet:?xt=****"
 ```bash
 ./qbtctl --add torrent.file --set-category "ISO" -gn
