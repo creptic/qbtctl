@@ -20,14 +20,14 @@ Lightweight, fits on a floppy, yet powerful — perfect for scripting or managin
 
 ## 📥 Download
 
-Download the latest **precompiled binary (x86 / x86_64 Linux)**
+Download the latest **precompiled binary (x86 / x86_64 Linux / Docker)**
 ```bash
 wget https://github.com/creptic/qbtctl/releases/latest/download/qbtctl
 chmod +x qbtctl
 ```
 https://github.com/creptic/qbtctl/releases/latest/download/qbtctl
 
-Install from [AUR](https://aur.archlinux.org/packages/qbtctl/) with: ``yay -S qbtctl``
+Install from [AUR](https://aur.archlinux.org/packages/qbtctl/) with: ``yay qbtctl`` for binary use ``yay qbtctl-bin``  
 
 ---
 
