@@ -122,9 +122,9 @@ Add a magnet link, set ratio 2.0, set seedtime to 4 days
 ```
 
 ## 2. Watch all torrents 
-Requires a tty, (may scroll spam in some terminals); (Fixed on git)
+Requires a tty, (may scroll spam in some terminals)
 
-Tested and working with Linux TTY and Konsole in Plasma.
+* Tested and working with Linux TTY and Konsole in Plasma.
 ```bash
 ./qbtctl -w
 ```
