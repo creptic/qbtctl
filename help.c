@@ -5,8 +5,8 @@
  *          Handles printing command lists, flags, examples, and detailed
  *          instructions for users.
  *
- * Version: 1.5.0
- * Date:    2026-03-26
+ * Version: 1.5.1
+ * Date:    2026-03-29
  *
  * Features:
  *   - Displays full help for all commands and options

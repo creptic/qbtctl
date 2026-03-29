@@ -5,8 +5,8 @@
  *          for the qbtctl CLI. Provides secure handling of credentials
  *          for qBittorrent Web API access.
  *
- * Version: 1.5.0
- * Date:    2026-03-26
+ * Version: 1.5.1
+ * Date:    2026-03-29
  *
  * Features:
  *   - Defines authentication structs for username/password storage

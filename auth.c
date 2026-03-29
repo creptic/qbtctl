@@ -4,8 +4,8 @@
  * Purpose: Handles authentication for qbtctl CLI, including credential initialization,
  *          secure password storage, and integration with the qBittorrent Web API.
  *
- * Version: 1.5.0
- * Date:    2026-03-26
+ * Version: 1.5.1
+ * Date:    2026-03-29
  *
  * Features:
  *   - Initialize authentication from command-line arguments or stored credentials

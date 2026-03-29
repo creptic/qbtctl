@@ -4,8 +4,8 @@
  * Purpose: Minimal, ultra-fast command-line interface for monitoring and controlling qBittorrent
  *          via its Web API. Includes live torrent monitoring, sorting, and torrent info display.
  *
- * Version: 1.5.0
- * Date:    2026-03-26
+ * Version: 1.5.1
+ * Date:    2026-03-29
  *
  * Features:
  *   - Set/Get a torrent settings in real time
@@ -38,7 +38,7 @@
 void show_help(void);
 
 /* QBTCTL_VERSION - Current version */
-#define QBTCTL_VERSION "1.5.0"
+#define QBTCTL_VERSION "1.5.1"
 
 #define MAX_JSON 1048576
 /**

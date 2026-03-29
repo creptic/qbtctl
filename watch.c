@@ -4,8 +4,8 @@
  * Purpose: Live monitoring module for qbtctl. Handles fetching torrent data,
  *          formatting output, and rendering a dynamic table view with auto-refresh.
  *
- * Version: 1.5.0
- * Date:    2026-03-26
+ * Version: 1.5.1
+ * Date:    2026-03-29
  *
  * Features:
  *   - Fetches all torrents via /api/v2/torrents/info
