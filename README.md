@@ -14,7 +14,7 @@ It allows you to manage torrents directly from the terminal, supporting operatio
 - Monitoring torrent upload/download limits, state, and seed time  
 - Interactive authentication setup or command-line credentials  
 
-Designed to be **compact**, making it easy to compile and deploy, and run in docker.
+Designed to be **compact**, making it easy to compile, deploy, and run in docker.
 
 Lightweight, fits on a floppy, yet powerful — perfect for scripting or managing your qBittorrent instance from the terminal.
 
