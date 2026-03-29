@@ -36,56 +36,58 @@
 #include "cJSON.h"
 #include "auth.h"
 #include "watch.h"
+
 /* ================== HELPERS ================== */
-int term_supports_ansi(void)
+
+
+static int term_supports_ansi(void)
 {
-    int is_tty = isatty(fileno(stdout));
-    const char *term = getenv("TERM");
+/**
+ * term_supports_ansi()
+ *
+ * Returns 1 if stdout is a TTY and the terminal is likely ANSI-capable.
+ * Returns 0 otherwise.
+*/   int is_tty = isatty(fileno(stdout));
+    if (!is_tty) return 0;
+
     const char *no_color = getenv("NO_COLOR");
+    if (no_color != NULL) return 0;
 
-    int ansi = 0;
+    const char *term = getenv("TERM");
+    if (term == NULL) return 0;
 
-    /* must be a tty */
-    if (!is_tty) {
-        return 0;
-    }
+    if (strcmp(term, "dumb") == 0 || strcmp(term, "unknown") == 0) return 0;
 
-    /* user explicitly disabled color */
-    if (no_color != NULL) {
-        return 0;
-    }
+    // Whitelist common ANSI-capable terminals
+    if (strncmp(term, "xterm", 5) == 0) return 1;
+    if (strncmp(term, "screen", 6) == 0) return 1;
+    if (strncmp(term, "tmux", 4) == 0) return 1;
+    if (strncmp(term, "linux", 5) == 0) return 1;
+    if (strncmp(term, "vt", 2) == 0) return 1;
 
-    /* TERM must exist */
-    if (term == NULL) {
-        return 0;
-    }
+    // Fallback: assume non-dumb terminal supports ANSI
+    return 1;
+}
 
-    /* known bad terminals */
-    if (strcmp(term, "dumb") == 0) {
-        return 0;
-    }
+static int term_supports_alt_screen(void)
+{
+/**
+ * term_supports_alt_screen()
+ *
+ * Returns 1 if the terminal is likely to honor the alternate screen buffer
+ * (\033[?1049h), 0 otherwise.
+*/
+    const char *term = getenv("TERM");
+    if (term == NULL) return 0;
 
-    if (strcmp(term, "unknown") == 0) {
-        return 0;
-    }
+    // Only known terminals support the alternate screen reliably
+    if (strncmp(term, "xterm", 5) == 0) return 1;
+    if (strncmp(term, "screen", 6) == 0) return 1;
+    if (strncmp(term, "tmux", 4) == 0) return 1;
+    if (strncmp(term, "rxvt", 4) == 0) return 1;
 
-    /* common good terminals */
-    if (strncmp(term, "xterm", 5) == 0) {
-        ansi = 1;
-    } else if (strncmp(term, "screen", 6) == 0) {
-        ansi = 1;
-    } else if (strncmp(term, "tmux", 4) == 0) {
-        ansi = 1;
-    } else if (strncmp(term, "linux", 5) == 0) {
-        ansi = 1;
-    } else if (strncmp(term, "vt", 2) == 0) {
-        ansi = 1;
-    } else {
-        /* fallback: assume ANSI unless explicitly bad */
-        ansi = 1;
-    }
-
-    return ansi;
+    // Could add more here (konsole, kitty, etc.)
+    return 0;
 }
 static int get_terminal_width(void)
 {
@@ -154,87 +156,79 @@ static void format_ddhhmm(char *buf, size_t len, long long seconds)
 
 /* ================== WATCH LOOP ================== */
 
-
-
-/* --- terminfo helpers --- */
-
-static void tput_clear(void) {
-    system("tput clear");
-}
-
-static void tput_home(void) {
-    system("tput cup 0 0");
-}
-
-static void tput_hide_cursor(void) {
-    system("tput civis");
-}
-
-static void tput_show_cursor(void) {
-    system("tput cnorm");
-}
-
-/* --- your watch loop --- */
-
 int watch_all_torrents(CURL *curl)
 {
-    if(!curl) return 0;
+/**
+ * @brief Live monitoring loop for all torrents.
+ *
+ * Continuously fetches torrent data via qBittorrent Web API
+ * and displays it in a formatted ANSI table. Supports:
+ * - Alternate screen for clean refresh
+ * - Single snapshot for non-TTY or dumb terminals
+ * - Dynamic column width adjustment based on terminal size
+ *
+ * @param curl Initialized CURL handle used for API requests.
+ *
+ * @return int Returns 1 on success, 0 on failure.
+ *
+ * @note ANSI-only; no ncurses or extra dependencies.
+ * @note Updates happen in a single flush per frame to reduce flicker.
+ * @note Scroll-safe on most terminals, including XFCE, Konsole, and tmux.
+ * @note Displays: Name, Hash, Size, Progress, ETA/Seedtime,
+ *       DL/UL speeds, downloaded/uploaded, Tags, Category, State.
+*/
+if(!curl) return 0;
 
     int has_ansi = term_supports_ansi();
+    int use_alt = has_ansi && term_supports_alt_screen();
 
-    tput_clear();
-    tput_hide_cursor();
+    if(use_alt) {
+        printf("\033[?1049h"); // enter alternate screen
+        fflush(stdout);
+    }
+
+    char buf[32768]; // single buffer per frame
 
     do
     {
-        char buf[65536];
         int pos = 0;
 
-        int term_width = get_terminal_width();
+        // clear screen at start of frame
+        if(has_ansi) pos += snprintf(buf + pos, sizeof(buf) - pos, "\033[2J\033[H");
 
+        int term_width = get_terminal_width();
         int name_w = 25;
         if(term_width > 140) name_w = 30;
         if(term_width > 160) name_w = 35;
         if(name_w > 40) name_w = 40;
         if(name_w < 15) name_w = 15;
-
-        int hash_w = 6;
-        int tags_w = 18;
-        int cat_w  = 12;
-        int state_w= 10;
-
-        /* move cursor to top instead of clearing scrollback */
-        tput_home();
+        int hash_w = 6, tags_w = 18, cat_w = 12, state_w = 10;
 
         char url[512];
         snprintf(url,sizeof(url),"%s/api/v2/torrents/info",creds.qbt_url);
 
         char *json = qbt_get_json(curl,url);
-        if(!json) return 0;
+        if(!json) break;
 
         cJSON *root = cJSON_Parse(json);
         free(json);
-        if(!root || !cJSON_IsArray(root))
-        {
+        if(!root || !cJSON_IsArray(root)) {
             if(root) cJSON_Delete(root);
-            return 0;
+            break;
         }
 
         int count = cJSON_GetArraySize(root);
-        if(count <= 0)
-        {
+        if(count <= 0) {
             cJSON_Delete(root);
-            pos += snprintf(buf+pos,sizeof(buf)-pos,"No torrents\n");
-            fwrite(buf,1,pos,stdout);
-            fflush(stdout);
+            pos += snprintf(buf + pos, sizeof(buf) - pos, "No torrents\n");
+            fwrite(buf,1,pos,stdout); fflush(stdout);
             sleep(5);
             continue;
         }
 
         const char *names[count], *states[count], *tags[count], *categories[count], *hashes[count];
-        long long sizes[count], dls[count], uls[count], etas[count], downloaded[count], uploaded[count];
+        long long sizes[count], dls[count], uls[count], etas[count], seedtimes[count], downloaded[count], uploaded[count];
         double progs[count];
-
         long long total_dl=0, total_ul=0;
         int active_torrents=0;
 
@@ -243,8 +237,8 @@ int watch_all_torrents(CURL *curl)
             cJSON *obj = cJSON_GetArrayItem(root,i);
             cJSON *item;
 
-            names[i]=states[i]=tags[i]=categories[i]=hashes[i]="";
-            sizes[i]=dls[i]=uls[i]=etas[i]=downloaded[i]=uploaded[i]=0;
+            names[i] = states[i] = tags[i] = categories[i] = hashes[i] = "";
+            sizes[i]=dls[i]=uls[i]=etas[i]=seedtimes[i]=downloaded[i]=uploaded[i]=0;
             progs[i]=0.0;
 
             item=cJSON_GetObjectItem(obj,"name"); if(cJSON_IsString(item)) names[i]=item->valuestring;
@@ -252,7 +246,6 @@ int watch_all_torrents(CURL *curl)
             item=cJSON_GetObjectItem(obj,"tags"); if(cJSON_IsString(item)) tags[i]=item->valuestring;
             item=cJSON_GetObjectItem(obj,"category"); if(cJSON_IsString(item)) categories[i]=item->valuestring;
             item=cJSON_GetObjectItem(obj,"hash"); if(cJSON_IsString(item)) hashes[i]=item->valuestring;
-
             item=cJSON_GetObjectItem(obj,"total_size"); if(cJSON_IsNumber(item)) sizes[i]=(long long)item->valuedouble;
             item=cJSON_GetObjectItem(obj,"progress"); if(cJSON_IsNumber(item)) progs[i]=item->valuedouble;
             item=cJSON_GetObjectItem(obj,"eta"); if(cJSON_IsNumber(item)) etas[i]=(long long)item->valuedouble;
@@ -261,47 +254,45 @@ int watch_all_torrents(CURL *curl)
             item=cJSON_GetObjectItem(obj,"downloaded"); if(cJSON_IsNumber(item)) downloaded[i]=(long long)item->valuedouble;
             item=cJSON_GetObjectItem(obj,"uploaded"); if(cJSON_IsNumber(item)) uploaded[i]=(long long)item->valuedouble;
 
-            total_dl += dls[i];
-            total_ul += uls[i];
-
+            total_dl += dls[i]; total_ul += uls[i];
             if(strcmp(states[i],"downloading")==0 || strcmp(states[i],"uploading")==0)
                 active_torrents++;
         }
 
-        /* totals */
+        // totals
         char total_dl_buf[32], total_ul_buf[32];
         fmt_bytes(total_dl_buf,sizeof(total_dl_buf),total_dl);
         fmt_bytes(total_ul_buf,sizeof(total_ul_buf),total_ul);
 
-        pos += snprintf(buf+pos,sizeof(buf)-pos,
-                        "\n Active torrents: %d | Total DL: %s | Total UL: %s\n\n",
+        pos += snprintf(buf+pos,sizeof(buf)-pos,"\n Active torrents: %d | Total DL: %s | Total UL: %s\n\n",
                         active_torrents,total_dl_buf,total_ul_buf);
 
-        /* header */
+        // header
         pos += snprintf(buf+pos,sizeof(buf)-pos,
                         "+-------------------------------------+--------+----------+------+----------+----------+----------+----------+----------+--------------------+--------------+-----------+\n");
-
         pos += snprintf(buf+pos,sizeof(buf)-pos,
                         "| %-*s | %-*s | %8s | %4s | %8s | %8s | %8s | %8s | %8s | %-*s | %-*s | %-*s|\n",
-                        name_w,"Name",hash_w,"Hash","Size","Prog","ETA","DL","UL","Download","Upload",
-                        tags_w,"Tags",cat_w,"Category",state_w,"State");
-
+                        name_w,"Name",
+                        hash_w,"Hash",
+                        "Size","Prog","ETA","DL","UL","Download","Upload",
+                        tags_w,"Tags",
+                        cat_w,"Category",
+                        state_w,"State");
         pos += snprintf(buf+pos,sizeof(buf)-pos,
                         "+-------------------------------------+--------+----------+------+----------+----------+----------+----------+----------+--------------------+--------------+-----------+\n");
 
+        // rows
         for(int i=0;i<count;i++)
         {
             char name_buf[128], hash_buf[16], tags_buf[32], cat_buf[32], state_buf[32];
             char size_buf[32], dl_buf[32], ul_buf[32], downloaded_buf[32], uploaded_buf[32], eta_buf[32], prog_buf[16];
 
-            trunc_field(name_buf,name_w,names[i]);
-            trunc_field(tags_buf,tags_w,tags[i]);
-            trunc_field(cat_buf,cat_w,categories[i]);
-            trunc_field(state_buf,state_w,states[i]);
-
+            trunc_field(name_buf, name_w, names[i]);
+            trunc_field(tags_buf, tags_w, tags[i]);
+            trunc_field(cat_buf, cat_w, categories[i]);
+            trunc_field(state_buf, state_w, states[i]);
             memset(hash_buf,0,sizeof(hash_buf));
-            strncpy(hash_buf,hashes[i],6);
-            hash_buf[6]='\0';
+            strncpy(hash_buf, hashes[i], 6); hash_buf[6]='\0';
 
             fmt_bytes(size_buf,sizeof(size_buf),sizes[i]);
             fmt_bytes(dl_buf,sizeof(dl_buf),dls[i]);
@@ -311,27 +302,57 @@ int watch_all_torrents(CURL *curl)
 
             snprintf(prog_buf,sizeof(prog_buf),"%.0f%%",progs[i]*100.0);
 
-            if(strcmp(states[i],"downloading")==0) {
-                strcpy(state_buf,"download");
-            }
+            if(strcmp(states[i],"downloading")==0) strcpy(state_buf,"download");
 
-            format_ddhhmm(eta_buf,sizeof(eta_buf),etas[i]);
+            const int ETA_COL_WIDTH = 9;
+            if(etas[i]==0 || etas[i]>=8640000) {
+                int pad=(ETA_COL_WIDTH-1)/2;
+                snprintf(eta_buf,sizeof(eta_buf),"%*s∞%*s",pad,"",ETA_COL_WIDTH-pad-2,"");
+            } else {
+                format_ddhhmm(eta_buf,sizeof(eta_buf),etas[i]);
+            }
 
             pos += snprintf(buf+pos,sizeof(buf)-pos,
                             "| %-*s | %-*s | %8s | %4s | %8s | %8s | %8s | %8s | %8s | %-*s | %-*s | %-*s|\n",
-                            name_w,name_buf,hash_w,hash_buf,
-                            size_buf,prog_buf,eta_buf,dl_buf,ul_buf,
-                            downloaded_buf,uploaded_buf,
-                            tags_w,tags_buf,cat_w,cat_buf,state_w,state_buf);
+                            name_w,name_buf,
+                            hash_w,hash_buf,
+                            size_buf,
+                            prog_buf,
+                            eta_buf,
+                            dl_buf,
+                            ul_buf,
+                            downloaded_buf,
+                            uploaded_buf,
+                            tags_w,tags_buf,
+                            cat_w,cat_buf,
+                            state_w,state_buf);
         }
+
+        if(has_ansi) {
+            pos += snprintf(buf+pos,sizeof(buf)-pos,
+                            "+-------------------------------------+--------+----------+------+----------+----------+----------+----------+----------+--------------------+--------------+-----------+\n"
+                            "|       Press <Ctrl>+c to quit        |\n"
+                            "+-------------------------------------+\n");
+        } else {
+            pos += snprintf(buf+pos,sizeof(buf)-pos,
+                            "+-------------------------------------+--------+----------+------+----------+----------+----------+----------+----------+--------------------+--------------+-----------+\n"
+                            "| No TTY detected showing single snapshot only |\n"
+                            "+----------------------------------------------+\n");
+        }
+
+        cJSON_Delete(root);
 
         fwrite(buf,1,pos,stdout);
         fflush(stdout);
 
-        sleep(2);
+        sleep(3);
 
     } while(1);
 
-    tput_show_cursor();
+    if(use_alt) {
+        printf("\033[?1049l");
+        fflush(stdout);
+    }
+
     return 1;
 }
