@@ -33,12 +33,12 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/ioctl.h>
+#include <signal.h>
 #include "cJSON.h"
 #include "auth.h"
 #include "watch.h"
 
 /* ================== HELPERS ================== */
-
 
 static int term_supports_ansi(void)
 {
@@ -154,6 +154,36 @@ static void format_ddhhmm(char *buf, size_t len, long long seconds)
     snprintf(buf, len, "%02lld:%02lld:%02lld", days, hrs, mins);
 }
 
+
+static void restore_terminal(void)
+{
+    printf("\033[?25h");   // show cursor
+    printf("\033[?1049l"); // exit alt screen (safe even if unused)
+    printf("\033[0m");     // reset attributes
+    fflush(stdout);
+}
+
+static volatile sig_atomic_t stop = 0;
+/**
+ * Global flag to signal termination of the watch loop.
+ *
+ * This volatile sig_atomic_t variable is set by the
+ * handle_sigint() signal handler when the user presses Ctrl+C.
+ * The watch_all_torrents() loop checks this flag each iteration
+ * to exit gracefully while preserving the last frame on the terminal.
+ *
+ * Volatile is used to prevent compiler optimizations that might
+ * cache the value, and sig_atomic_t ensures atomic access in signal
+ * handlers.
+ */
+
+static void handle_sigint(int sig)
+{
+ /* --- ctrl+c handler --- */
+     (void)sig;
+     stop = 1;  // signal main loop to exit
+}
+
 /* ================== WATCH LOOP ================== */
 
 int watch_all_torrents(CURL *curl)
@@ -182,10 +212,17 @@ if(!curl) return 0;
     int has_ansi = term_supports_ansi();
     int use_alt = has_ansi && term_supports_alt_screen();
 
+    /* setup cleanup hooks */
+    signal(SIGINT, handle_sigint);
+    signal(SIGTERM, handle_sigint);
+    signal(SIGQUIT, handle_sigint);
+    atexit(restore_terminal);
+
     if(use_alt) {
         printf("\033[?1049h"); // enter alternate screen
         fflush(stdout);
     }
+
 
     char buf[32768]; // single buffer per frame
 
@@ -194,7 +231,7 @@ if(!curl) return 0;
         int pos = 0;
 
         // clear screen at start of frame
-        if(has_ansi) pos += snprintf(buf + pos, sizeof(buf) - pos, "\033[2J\033[H");
+       if(has_ansi) pos += snprintf(buf + pos, sizeof(buf) - pos, "\033[2J\033[H");
 
         int term_width = get_terminal_width();
         int name_w = 25;
@@ -338,22 +375,23 @@ if(!curl) return 0;
                             "+-------------------------------------+--------+----------+------+----------+----------+----------+----------+----------+--------------------+--------------+-----------+\n"
                             "| No TTY detected showing single snapshot only |\n"
                             "+----------------------------------------------+\n");
-            break;
+            cJSON_Delete(root);
+            fwrite(buf,1,pos,stdout);
+            fflush(stdout);
+            exit(0);
         }
 
         cJSON_Delete(root);
-
         fwrite(buf,1,pos,stdout);
         fflush(stdout);
-
         sleep(3);
 
-    } while(1);
+    } while(!stop);
 
     if(use_alt) {
         printf("\033[?1049l");
         fflush(stdout);
+        exit(0);
     }
-    fflush(stdout);
     return 1;
 }
