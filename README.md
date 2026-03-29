@@ -121,8 +121,8 @@ Add a magnet link, set ratio 2.0, set seedtime to 4 days
 ./qbtctl --add "magnet:?xt=urn:btih:0123456..." -srl 2.0 -sst 04:00:00
 ```
 
-## 2. Watch all torrents (Fixed on git)
-Requires a tty, (may scroll spam in some terminals); 
+## 2. Watch all torrents 
+Requires a tty, (may scroll spam in some terminals); (Fixed on git)
 
 Tested and working with Linux TTY and Konsole in Plasma.
 ```bash
