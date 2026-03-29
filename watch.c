@@ -354,6 +354,6 @@ if(!curl) return 0;
         printf("\033[?1049l");
         fflush(stdout);
     }
-
+    fflush(stdout);
     return 1;
 }
