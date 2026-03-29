@@ -171,7 +171,7 @@ int watch_all_torrents(CURL *curl)
  *
  * @return int Returns 1 on success, 0 on failure.
  *
- * @note ANSI-only; no ncurses or extra dependencies.
+ * @note ANSI-only;
  * @note Updates happen in a single flush per frame to reduce flicker.
  * @note Scroll-safe on most terminals, including XFCE, Konsole, and tmux.
  * @note Displays: Name, Hash, Size, Progress, ETA/Seedtime,
