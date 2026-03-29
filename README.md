@@ -27,7 +27,7 @@ chmod +x qbtctl
 ```
 https://github.com/creptic/qbtctl/releases/latest/download/qbtctl
 
-Install from [AUR](https://aur.archlinux.org/packages/qbtctl/) with: ``yay qbtctl`` or use ``yay qbtctl-bin`` for binary.  
+Install from [AUR](https://aur.archlinux.org/packages/qbtctl-bin/) with: ``yay qbtctl`` or use ``yay qbtctl-bin`` for binary.  
 
 ---
 
